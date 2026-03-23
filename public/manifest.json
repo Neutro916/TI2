@@ -1,0 +1,21 @@
+{
+  "name": "TermIntel Rig",
+  "short_name": "TermIntel",
+  "description": "Mobile-first AI Orchestration Rig",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#1a9fff",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/termintel/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/termintel/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

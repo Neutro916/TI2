@@ -1,8 +1,15 @@
+# Dependencies
 node_modules/
+# Build files
 build/
-dist/
-coverage/
+# Environment files
+.env
+# Logs
+npm-debug.log*
+# Editor directories and files
+.idea/
+.vscodecheck/
+*.swp
+*.swo
 .DS_Store
-*.log
-.env*
-!.env.example
+Thumbs.db

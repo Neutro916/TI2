@@ -74,8 +74,28 @@ else
 fi
 
 echo "[INFO] ABHA/Rodin geometry: 5 inch"`
+  },
+  {
+    name: '.gitignore',
+    lang: 'txt',
+    color: 'var(--color-txt3)',
+    raw: `# Dependencies
+node_modules/
+# Build files
+build/
+# Environment files
+.env
+# Logs
+npm-debug.log*
+# Editor directories and files
+.idea/
+.vscodecheck/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db`
   }
 ];
 
 export const SHELL_PROMPTS = ['forge:~$', 'node>', '>>>'];
-export const LANG_LABELS = ['JS', 'PY', 'SH'];
+export const LANG_LABELS = ['JS', 'PY', 'SH', 'TXT'];

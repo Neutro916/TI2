@@ -1,12 +1,12 @@
+#!/usr/bin/env node
+
 /**
- * TermIntel v2 - Local Bridge Script
+ * TermIntel v2 - Universal Bridge Script
  * Run this in Termux or on your PC to give the TermIntel web app access to your local files.
  * 
  * Usage:
- * 1. Install dependencies: npm install express cors body-parser
- * 2. Run: node bridge.js
- * 3. Use a tunnel (like ngrok or cloudflared) to expose port 3001 to the web.
- * 4. Paste the tunnel URL into TermIntel's Host settings.
+ * 1. npx termintel-rig
+ * 2. Paste the printed IP into TermIntel's Host settings.
  */
 
 const express = require('express');
@@ -14,12 +14,12 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs').promises;
 const path = require('path');
+const os = require('os');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 const app = express();
-const PORT = 3001;
 
 app.use(cors()); // Allow cross-origin requests from the web app
 app.use(bodyParser.json());
@@ -27,17 +27,45 @@ app.use(bodyParser.json());
 // Root directory to expose (defaults to current dir)
 const ROOT = process.cwd();
 
-console.log(`[TermIntel Bridge] Starting...`);
-console.log(`[TermIntel Bridge] Exposing: ${ROOT}`);
+// Static serving for the web app (if built)
+const DIST_PATH = path.join(__dirname, 'dist');
+if (require('fs').existsSync(DIST_PATH)) {
+  app.use(express.static(DIST_PATH));
+  console.log(`[TermIntel Bridge] Serving web UI from: ${DIST_PATH}`);
+}
 
-// List files
+// IP Discovery
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+// --- SAFETY GATE: FIXES THE 'SPLIT' ERROR ---
 app.get('/api/files', async (req, res) => {
   try {
-    const files = await fs.readdir(ROOT, { recursive: true });
-    const filtered = files.filter(f => !f.includes('node_modules') && !f.startsWith('.git') && !f.startsWith('.'));
-    res.json(filtered);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    const files = await fs.readdir(ROOT);
+    const filtered = files.filter(f => !f.startsWith('.') && f !== 'node_modules' && f !== 'dist');
+    const data = await Promise.all(filtered.map(async (file) => {
+      const fullPath = path.join(ROOT, file);
+      try {
+        const stats = await fs.stat(fullPath);
+        if (stats.isFile()) {
+          const raw = await fs.readFile(fullPath, 'utf8');
+          return { name: file, raw: raw || "" };
+        }
+      } catch (e) {}
+      return { name: file, raw: "" };
+    }));
+    res.json(data);
+  } catch (e) {
+    res.json([{ name: "error.txt", raw: "Failed to read directory" }]);
   }
 });
 
@@ -80,7 +108,24 @@ app.post('/api/shell', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[TermIntel Bridge] Running on http://localhost:${PORT}`);
-  console.log(`[TermIntel Bridge] Use a tunnel to expose this to the web app.`);
-});
+// Auto-Port Selection
+function startServer(port) {
+  const server = app.listen(port, '0.0.0.0', () => {
+    const ip = getLocalIP();
+    console.log(`\n🚀 TermIntel Bridge Live on http://${ip}:${port}`);
+    console.log(`🔗 Paste this into your TermIntel UI to sync.\n`);
+    console.log(`[TermIntel Bridge] Exposing: ${ROOT}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`[TermIntel Bridge] Port ${port} taken, trying ${port + 1}...`);
+      startServer(port + 1);
+    } else {
+      console.error(`[TermIntel Bridge] Error: ${err.message}`);
+    }
+  });
+}
+
+const DEFAULT_PORT = process.env.PORT || (process.env.NODE_ENV === 'production' ? 3000 : 3001);
+startServer(parseInt(DEFAULT_PORT));

@@ -42,6 +42,6 @@ export interface Message {
   thinking?: string;
 }
 
-export type PageType = 'editor' | 'shell' | 'host' | 'aider' | 'config';
+export type PageType = 'editor' | 'shell' | 'monitor' | 'settings';
 export type VimMode = 'NORMAL' | 'INSERT' | 'VISUAL' | 'COMMAND';
 export type ChatMode = 'aider' | 'chat' | 'freq';
