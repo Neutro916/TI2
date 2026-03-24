@@ -42,17 +42,20 @@ export class ProviderSync {
       }
     }
     
-    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter') {
+    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter' || endpoint.type === 'LMStudio') {
       try {
         const isOpenRouter = endpoint.host.includes('openrouter.ai');
-        const url = `https://${endpoint.host}${endpoint.port === '443' ? '' : ':' + endpoint.port}/v1/models`;
+        // Automatically use HTTP for localhost, raw IP addresses (tunnels), or LMStudio to allow phone offloading
+        const isLocalHostOrIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(endpoint.host) || endpoint.host === 'localhost';
+        const protocol = (endpoint.type === 'LMStudio' || isLocalHostOrIP) && endpoint.port !== '443' ? 'http' : 'https';
+        const url = `${protocol}://${endpoint.host}${endpoint.port === '443' || endpoint.port === '80' ? '' : ':' + endpoint.port}/v1/models`;
         const headers: Record<string, string> = {
           'Authorization': `Bearer ${endpoint.apiKey}`,
           'Content-Type': 'application/json'
         };
         if (isOpenRouter) {
           headers['HTTP-Referer'] = 'https://ais-dev-kneag7xeubv4up2nfgbavl-41696233443.us-east1.run.app';
-          headers['X-Title'] = 'T2I Terminal';
+          headers['X-Title'] = 'Terminal to Intel';
         }
         const res = await fetch(url, { headers });
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -86,7 +89,7 @@ export class ProviderSync {
     freqDivisor: number,
     tools: any[] = []
   ): Promise<{ text: string, functionCalls?: any[] }> {
-    const systemInstruction = `You are T2I AI (Terminal to Intel). Frequency Awareness: ${freqDivisor} Hz divisor active. Understand Reality Forge geometry. Use tools if available.`;
+    const systemInstruction = `You are Terminal to Intel AI. Frequency Awareness: ${freqDivisor} Hz divisor active. Understand Reality Forge geometry. Use tools if available.`;
 
     if (endpoint.type === 'Gemini') {
       const response = await this.ai.models.generateContent({
@@ -118,16 +121,18 @@ export class ProviderSync {
       return { text: data.response || 'No response from Ollama' };
     }
 
-    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter') {
+    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter' || endpoint.type === 'LMStudio') {
       try {
-        const url = `https://${endpoint.host}${endpoint.port === '443' ? '' : ':' + endpoint.port}/v1/chat/completions`;
+        const isLocalHostOrIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(endpoint.host) || endpoint.host === 'localhost';
+        const protocol = (endpoint.type === 'LMStudio' || isLocalHostOrIP) && endpoint.port !== '443' ? 'http' : 'https';
+        const url = `${protocol}://${endpoint.host}${endpoint.port === '443' || endpoint.port === '80' ? '' : ':' + endpoint.port}/v1/chat/completions`;
         const headers: Record<string, string> = {
           'Authorization': `Bearer ${endpoint.apiKey}`,
           'Content-Type': 'application/json'
         };
         if (endpoint.host.includes('openrouter.ai')) {
           headers['HTTP-Referer'] = 'https://ais-dev-kneag7xeubv4up2nfgbavl-41696233443.us-east1.run.app';
-          headers['X-Title'] = 'T2I Terminal';
+          headers['X-Title'] = 'Terminal to Intel';
         }
         const res = await fetch(url, {
           method: 'POST',

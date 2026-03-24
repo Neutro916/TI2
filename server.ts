@@ -6,6 +6,7 @@ import { spawn, exec } from "child_process";
 import path from "path";
 import fs from "fs";
 import chokidar from "chokidar";
+import basicAuth from "express-basic-auth";
 
 const execAsync = (command: string): Promise<{stdout: string, stderr: string}> => {
   return new Promise((resolve, reject) => {
@@ -21,6 +22,15 @@ const execAsync = (command: string): Promise<{stdout: string, stderr: string}> =
 
 async function startServer() {
   const app = express();
+
+  if (process.env.ADMIN_PASSWORD) {
+    app.use(basicAuth({
+      users: { 'admin': process.env.ADMIN_PASSWORD },
+      challenge: true,
+      realm: 'AI Studio Rig'
+    }));
+  }
+
   const httpServer = createServer(app);
   const io = new Server(httpServer);
   const PORT = 3000;
@@ -126,7 +136,7 @@ async function startServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, host: true },
       appType: "spa",
     });
     app.use(vite.middlewares);

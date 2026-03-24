@@ -58,7 +58,7 @@ export default function App() {
   const [curPage, setCurPage] = useState<PageType>('shell');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isNavMinimized, setIsNavMinimized] = useState(false);
-  const [curFileIdx, setCurFileIdx] = useState(3);
+  const [curFileIdx, setCurFileIdx] = useState(-1);
   const [files, setFiles] = useState<FileData[]>(INITIAL_FILES);
   const [vimMode, setVimMode] = useState<VimMode>('NORMAL');
   const [curLine, setCurLine] = useState(15);
@@ -99,7 +99,8 @@ export default function App() {
       'Claw Hub': '▣',
       'Telegram Token': '◎',
       'Chat Bot Agent': '◉',
-      'MCP': '⬡'
+      'MCP': '⬡',
+      'LMStudio': '⚡'
     };
     if (newEndpoint.type && typeToIcon[newEndpoint.type]) {
       setNewEndpoint(prev => ({ ...prev, icon: typeToIcon[newEndpoint.type!] }));
@@ -139,6 +140,13 @@ export default function App() {
   const [isX11Active, setIsX11Active] = useState(false);
   const [isSandboxActive, setIsSandboxActive] = useState(false);
   const [favScripts, setFavScripts] = useState([
+    { category: 'GIT MANAGER', items: [
+      { name: 'git status', cmd: 'git status', icon: '📦' },
+      { name: 'git pull', cmd: 'git pull', icon: '↻' },
+      { name: 'git add all', cmd: 'git add .', icon: 'Plus' },
+      { name: 'git auto-commit', cmd: 'git commit -m "Auto Update"', icon: 'Save' },
+      { name: 'git log', cmd: 'git log -n 5 --oneline', icon: '⌨' }
+    ]},
     { category: 'SYSTEM', items: [
       { name: 'apt update', cmd: 'sudo apt update', icon: '⚙' },
       { name: 'pkg install', cmd: 'pkg install ', icon: '📦' },
@@ -213,9 +221,21 @@ export default function App() {
     { id: 'anthropic', name: 'Anthropic', type: 'API', host: 'api.anthropic.com', port: '443', apiKey: '', status: 'IDLE', icon: '⬡', isProvider: true },
     { id: 'gemini', name: 'Google Gemini', type: 'API', host: 'generativelanguage.googleapis.com', port: '443', apiKey: '', status: 'API', icon: '⚡', isProvider: true },
     { id: 'mistral', name: 'Mistral AI', type: 'API', host: 'api.mistral.ai', port: '443', apiKey: '', status: 'IDLE', icon: '◈', isProvider: true },
-    { id: 'groq', name: 'Groq', type: 'API', host: 'api.groq.com', port: '443', apiKey: '', status: 'IDLE', icon: '▣', isProvider: true },
-    { id: 'perplexity', name: 'Perplexity', type: 'API', host: 'api.perplexity.ai', port: '443', apiKey: '', status: 'IDLE', icon: '◎', isProvider: true },
+    { id: 'ollama-local', name: 'Local Ollama', type: 'Ollama', host: typeof window !== 'undefined' ? window.location.hostname : 'localhost', port: '11434', apiKey: '', status: 'IDLE', icon: '◉', isProvider: false },
+    { id: 'lmstudio-local', name: 'Local LMStudio', type: 'LMStudio', host: typeof window !== 'undefined' ? window.location.hostname : 'localhost', port: '1234', apiKey: '', status: 'IDLE', icon: '⚡', isProvider: false },
+    { id: 'mobile-rig-tunnel', name: 'Mobile AI Rig Tunnel', type: 'Ollama', host: '192.168.1.50', port: '11434', apiKey: '', notes: 'Change host to your phone IP for local offloading', status: 'IDLE', icon: '📱', isProvider: false },
   ]);
+
+  // Auto-sync Rig models on startup
+  useEffect(() => {
+    const autoSync = async () => {
+      const localOllama = endpoints.find(e => e.id === 'ollama-local');
+      if (localOllama) {
+        await syncModels(localOllama);
+      }
+    };
+    setTimeout(autoSync, 1500);
+  }, []); // Run once on mount
 
   const [editingEndpoint, setEditingEndpoint] = useState<string | null>(null);
   const [wakeLock, setWakeLock] = useState<any>(null);
@@ -357,7 +377,7 @@ export default function App() {
         });
 
         // Initial greeting
-        term.writeln('\x1b[34mT2I terminal to Intel – Reality Forge OS\x1b[0m');
+        term.writeln('\x1b[34mTerminal to Intel – Reality Forge OS\x1b[0m');
         term.writeln(`\x1b[32m[OK] Shell instance ${tab.name} ready\x1b[0m`);
         term.write('\r\nforge:~$ ');
       }
@@ -525,6 +545,26 @@ export default function App() {
 
 
 
+
+  // Global IDE Shortcuts (Nomacode Parity)
+  useEffect(() => {
+    const handleGlobalKeys = (e: KeyboardEvent) => {
+      // Require Shift key, but not input elements unless we want to override
+      if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const tagName = (e.target as HTMLElement)?.tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA') return;
+
+        const char = e.key.toLowerCase();
+        if (char === 'n') { e.preventDefault(); addShellTab(); }
+        if (char === 'w') { e.preventDefault(); removeShellTab(activeShellId, { stopPropagation: () => {} } as any); }
+        if (char === 'k') { e.preventDefault(); setCurPage('ai'); }
+        if (char === 'c') { e.preventDefault(); setCurPage('editor'); }
+        if (char === 't') { e.preventDefault(); setCurPage('shell'); }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeys);
+    return () => window.removeEventListener('keydown', handleGlobalKeys);
+  }, [activeShellId]);
 
   // Vim Keybindings Logic
   useEffect(() => {
@@ -750,25 +790,36 @@ export default function App() {
           {showFileRail && (
             <motion.div 
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 160, opacity: 1 }}
+              animate={{ width: 220, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              className="border-r border-bd bg-bg flex flex-col shrink-0 overflow-hidden"
+              className="border-r border-bd bg-bg1 flex flex-col shrink-0 overflow-hidden shadow-xl"
             >
-              <div className="h-9 flex items-center justify-between px-3 border-b border-bd shrink-0">
-                <span className="text-[8px] tracking-[2px] text-txt3 uppercase font-bold">Workspace</span>
+              <div className="h-9 flex items-center justify-between px-3 border-b border-bd bg-bg2 shrink-0">
+                <span className="text-[13px] font-bold tracking-[1px] text-txt uppercase flex items-center gap-2">
+                  <RefreshCw size={12} className="text-blue-primary" /> Source Control
+                </span>
                 <X size={12} className="text-txt3 cursor-pointer hover:text-blue-primary" onClick={() => setShowFileRail(false)} />
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-hide">
-                {files.map((f, i) => (
-                  <button 
-                    key={i}
-                    onClick={() => { setCurFileIdx(i); setIsModified(false); }}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors group ${i === curFileIdx ? 'bg-blue-primary/10 text-blue-primary' : 'hover:bg-bg2 text-txt3 hover:text-txt'}`}
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: f.color }}></div>
-                    <span className="text-[9px] font-mono truncate">{f.name}</span>
-                  </button>
-                ))}
+              <div className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-hide">
+                <div className="text-[11px] font-bold text-txt3 uppercase tracking-widest px-2 py-1 mb-1">Changes</div>
+                {files.map((f, i) => {
+                  const isMod = i === curFileIdx ? isModified : false;
+                  const isUntracked = !isMod && (!f.raw || f.raw.length < 50); 
+                  return (
+                    <button 
+                      key={i}
+                      onClick={() => { setCurFileIdx(i); setIsModified(false); }}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded transition-colors group ${i === curFileIdx ? 'bg-blue-primary/15 text-blue-primary border-l-2 border-blue-primary' : 'border-l-2 border-transparent hover:bg-bg2 text-txt3 hover:text-txt'}`}
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <FileCode size={14} className={isMod ? 'text-yellow-500' : isUntracked ? 'text-green-500' : 'text-txt3 group-hover:text-txt'} />
+                        <span className="text-[13px] font-mono truncate text-left">{f.name}</span>
+                      </div>
+                      {isMod && <span className="text-[11px] font-bold text-yellow-500 font-mono">M</span>}
+                      {isUntracked && !isMod && <span className="text-[11px] font-bold text-green-500 font-mono">U</span>}
+                    </button>
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -790,7 +841,7 @@ export default function App() {
               <div 
                 key={i}
                 onClick={() => { setCurFileIdx(i); setIsModified(false); }}
-                className={`flex items-center gap-2 px-3 text-[10px] tracking-wider cursor-pointer border-r border-bd min-w-[100px] transition-all shrink-0 ${i === curFileIdx ? 'text-blue-primary bg-bg2 border-b-2 border-b-blue-primary' : 'text-txt3'}`}
+                className={`flex items-center gap-2 px-3 text-[15px] font-medium tracking-wider cursor-pointer border-r border-bd min-w-[100px] transition-all shrink-0 ${i === curFileIdx ? 'text-blue-primary bg-bg2 border-b-2 border-b-blue-primary' : 'text-txt3 font-medium'}`}
               >
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: f.color }}></div>
                 <span className="truncate max-w-[80px]">{f.name}</span>
@@ -801,7 +852,7 @@ export default function App() {
                 />
               </div>
             ))}
-            <div className="flex items-center justify-center w-9 text-txt3 cursor-pointer hover:text-txt" onClick={() => {
+            <div className="flex items-center justify-center w-9 text-txt3 font-medium cursor-pointer hover:text-txt" onClick={() => {
               const name = prompt('File name:', 'untitled.txt');
               if (name) {
                 const isNoColor = name.endsWith('.txt') || name.endsWith('.md');
@@ -813,7 +864,7 @@ export default function App() {
                 }]);
               }
             }}><Plus size={14} /></div>
-            <label className="flex items-center justify-center w-9 text-txt3 cursor-pointer hover:text-txt border-l border-bd">
+            <label className="flex items-center justify-center w-9 text-txt3 font-medium cursor-pointer hover:text-txt border-l border-bd">
               <FolderOpen size={14} />
               <input 
                 type="file" 
@@ -823,14 +874,14 @@ export default function App() {
                 onChange={handleFolderUpload} 
               />
             </label>
-            <div className="flex items-center justify-center px-3 text-[8px] text-blue-primary cursor-pointer hover:bg-blue-primary/10 border-l border-bd font-bold tracking-widest" onClick={simulateAiEdit}>
+            <div className="flex items-center justify-center px-3 text-[16px] font-bold font-medium text-blue-primary cursor-pointer hover:bg-blue-primary/10 border-l border-bd font-bold tracking-widest" onClick={simulateAiEdit}>
               <Zap size={12} className="mr-1" /> AI SCAN
             </div>
-            <div className={`flex items-center justify-center px-3 text-[8px] cursor-pointer border-l border-bd font-bold tracking-widest ${showPreview ? 'bg-blue-primary text-black' : 'text-txt3 hover:text-txt'}`} onClick={() => setShowPreview(!showPreview)}>
+            <div className={`flex items-center justify-center px-3 text-[16px] font-bold font-medium cursor-pointer border-l border-bd font-bold tracking-widest ${showPreview ? 'bg-blue-primary text-black' : 'text-txt3 font-medium hover:text-txt'}`} onClick={() => setShowPreview(!showPreview)}>
               <Monitor size={12} className="mr-1" /> PREVIEW
             </div>
             <div 
-              className="flex items-center justify-center px-3 text-[8px] text-blue-primary cursor-pointer hover:bg-blue-primary/10 border-l border-bd font-bold tracking-widest"
+              className="flex items-center justify-center px-3 text-[16px] font-bold font-medium text-blue-primary cursor-pointer hover:bg-blue-primary/10 border-l border-bd font-bold tracking-widest"
               onClick={() => {
                 const next = [...favScripts];
                 next[0].items.push({ name: file.name, cmd: `node ${file.name}`, icon: '⚡' });
@@ -842,7 +893,7 @@ export default function App() {
           </div>
           
           {/* Breadcrumb */}
-          <div className="h-6 bg-bg1 border-b border-bd flex items-center px-3 gap-2 shrink-0 text-[8px] text-txt3 uppercase tracking-tighter">
+          <div className="h-6 bg-bg1 border-b border-bd flex items-center px-3 gap-2 shrink-0 text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-tighter">
             <span>WORKSPACE › SCRIPTS › {file?.name?.toUpperCase() || 'NONE'}</span>
             <span className="ml-auto">LN {curLine}</span>
             <span className="ml-2">{LANG_LABELS[curFileIdx] || 'TXT'}</span>
@@ -851,18 +902,20 @@ export default function App() {
           {/* Editor Body */}
           <div className="flex flex-1 overflow-hidden relative">
             {!file ? (
-              <div className="flex-1 flex items-center justify-center text-txt3 text-[10px] tracking-widest uppercase">
-                No file selected
+              <div className="flex-1 flex flex-col items-center justify-center pointer-events-none select-none bg-black/40">
+                <Code2 size={64} className="text-bd mb-6 opacity-20" />
+                <div className="text-txt3/30 text-2xl font-black uppercase tracking-[4px] mb-3 text-center">Editor Empty</div>
+                <div className="text-txt3/20 text-[14px] font-bold uppercase tracking-widest">Load a file or folder to begin</div>
               </div>
             ) : (
               <>
-                <div className="w-10 bg-bg1 border-r border-bd py-2 text-right pr-2 text-[10px] text-txt3 leading-relaxed shrink-0 select-none">
+                <div className="w-10 bg-bg1 border-r border-bd py-2 text-right pr-2 text-[15px] font-medium text-txt3 font-medium leading-relaxed shrink-0 select-none">
                   {lines.map((_, i) => (
                     <div key={i} className={i === curLine - 1 ? 'text-blue-primary' : ''}>{i + 1}</div>
                   ))}
                 </div>
                 <div className="flex-1 overflow-auto scrollbar-thin bg-bg/40 backdrop-blur-md relative">
-                  <div className="absolute inset-0 p-2 text-[10px] leading-relaxed font-mono pointer-events-none whitespace-pre overflow-hidden opacity-80">
+                  <div className="absolute inset-0 p-2 text-[15px] font-medium leading-relaxed font-mono pointer-events-none whitespace-pre overflow-hidden opacity-80">
                     {lines.map((line, i) => (
                       <div key={i} className={i === curLine - 1 ? 'bg-blue-primary/10' : ''}>
                         {highlightCode(line)}
@@ -870,7 +923,7 @@ export default function App() {
                     ))}
                   </div>
                   <textarea
-                    className="w-full h-full p-2 text-[10px] leading-relaxed bg-transparent outline-none resize-none font-mono caret-blue-primary text-transparent selection:bg-blue-primary/30"
+                    className="w-full h-full p-2 text-[15px] font-medium leading-relaxed bg-transparent outline-none resize-none font-mono caret-blue-primary text-transparent selection:bg-blue-primary/30"
                     value={file.raw}
                     onChange={(e) => {
                       const newFiles = [...files];
@@ -920,8 +973,8 @@ export default function App() {
                       >
                         <div className="bg-bg1 border border-blue-primary/30 p-4 rounded-lg shadow-2xl max-w-[200px] w-full">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[8px] text-blue-primary font-bold tracking-[2px]">AI WORKING</span>
-                            <span className="text-[8px] text-blue-primary font-mono">{aiProgress}%</span>
+                            <span className="text-[16px] font-bold font-medium text-blue-primary font-bold tracking-[2px]">AI WORKING</span>
+                            <span className="text-[16px] font-bold font-medium text-blue-primary font-mono">{aiProgress}%</span>
                           </div>
                           <div className="h-1 bg-bg border border-bd rounded-full overflow-hidden mb-3">
                             <motion.div 
@@ -932,7 +985,7 @@ export default function App() {
                           </div>
                           <div className="space-y-1">
                             {aiLog.slice(-3).map((log, i) => (
-                              <div key={i} className="text-[7px] text-txt3 font-mono truncate opacity-60">
+                              <div key={i} className="text-[15px] font-medium font-medium text-txt3 font-medium font-mono truncate opacity-60">
                                 › {log}
                               </div>
                             ))}
@@ -956,14 +1009,14 @@ export default function App() {
                       className="border-l border-bd bg-bg overflow-hidden flex flex-col z-10"
                     >
                       <div className="h-6 bg-bg1 border-b border-bd flex items-center px-2 justify-between shrink-0">
-                        <span className="text-[7px] text-txt3 uppercase tracking-widest">Live Preview</span>
-                        <X size={10} className="text-txt3 cursor-pointer hover:text-txt" onClick={() => setShowPreview(false)} />
+                        <span className="text-[15px] font-medium font-medium text-txt3 font-medium uppercase tracking-widest">Live Preview</span>
+                        <X size={10} className="text-txt3 font-medium cursor-pointer hover:text-txt" onClick={() => setShowPreview(false)} />
                       </div>
-                      <div className="flex-1 p-4 overflow-auto bg-white text-black font-sans text-xs">
+                      <div className="flex-1 p-4 overflow-auto bg-white text-black font-sans text-base font-medium font-medium">
                         {file.lang === 'html' || file.name.endsWith('.html') ? (
                           <div dangerouslySetInnerHTML={{ __html: file.raw }} />
                         ) : (
-                          <div className="whitespace-pre-wrap font-mono text-[10px] text-txt3 italic">
+                          <div className="whitespace-pre-wrap font-mono text-[15px] font-medium text-txt3 font-medium italic">
                             // Preview only available for HTML/CSS files.
                             // Currently viewing raw output of {file.name}
                             <div className="mt-4 text-black not-italic">{file.raw}</div>
@@ -975,7 +1028,7 @@ export default function App() {
                 </AnimatePresence>
                 {/* Optimized See-Thru Minimap */}
                 <div className="w-12 bg-transparent border-l border-bd/20 flex flex-col items-center py-2 gap-[1px] overflow-hidden select-none shrink-0 backdrop-blur-sm">
-                  <div className="text-[5px] text-txt3 mb-2 uppercase tracking-[2px] opacity-30">MAP</div>
+                  <div className="text-[5px] text-txt3 font-medium mb-2 uppercase tracking-[2px] opacity-30">MAP</div>
                   <div ref={minimapRef} className="w-full flex-1 overflow-hidden relative opacity-60">
                     <div className="relative w-full">
                       <div 
@@ -1016,7 +1069,7 @@ export default function App() {
           </div>
 
           {/* Vim Bar */}
-          <div className={`h-6 flex items-center px-3 gap-3 shrink-0 text-[9px] font-bold transition-colors ${
+          <div className={`h-6 flex items-center px-3 gap-3 shrink-0 text-[13px] font-medium font-bold transition-colors ${
             vimMode === 'NORMAL' ? 'bg-blue-primary text-black' : 
             vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
             'bg-purple-primary text-white'
@@ -1047,22 +1100,22 @@ export default function App() {
               className="border-r border-bd bg-bg flex flex-col shrink-0 overflow-hidden"
             >
               <div className="h-8 flex items-center justify-between px-3 border-b border-bd shrink-0">
-                <span className="text-[8px] tracking-[2px] text-txt3 uppercase font-bold">Fav Scripts</span>
-                <X size={12} className="text-txt3 cursor-pointer hover:text-blue-primary" onClick={() => setShowFavSidebar(false)} />
+                <span className="text-[16px] font-bold font-medium tracking-[2px] text-txt3 font-medium uppercase font-bold">Fav Scripts</span>
+                <X size={12} className="text-txt3 font-medium cursor-pointer hover:text-blue-primary" onClick={() => setShowFavSidebar(false)} />
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-4 scrollbar-hide">
                 {favScripts.map(cat => (
                   <div key={cat.category}>
-                    <div className="text-[7px] text-txt3 uppercase tracking-widest mb-2 px-1">{cat.category}</div>
+                    <div className="text-[15px] font-medium font-medium text-txt3 font-medium uppercase tracking-widest mb-2 px-1">{cat.category}</div>
                     <div className="space-y-1">
                       {cat.items.map(s => (
                         <button 
                           key={s.name}
                           onClick={() => socketsRef.current[activeShellId]?.emit('terminal:input', s.cmd + '\n')}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-bg2 text-txt3 hover:text-txt transition-colors group"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-bg2 text-txt3 font-medium hover:text-txt transition-colors group"
                         >
-                          <span className="text-[10px] group-hover:text-blue-primary">{s.icon}</span>
-                          <span className="text-[9px] font-mono truncate">{s.name}</span>
+                          <span className="text-[15px] font-medium group-hover:text-blue-primary">{s.icon}</span>
+                          <span className="text-[13px] font-medium font-mono truncate">{s.name}</span>
                         </button>
                       ))}
                     </div>
@@ -1071,7 +1124,7 @@ export default function App() {
                 <div className="mt-4 px-1">
                   <button 
                     onClick={() => setIsAddingScript(true)}
-                    className="text-[8px] text-blue-primary hover:underline uppercase tracking-widest"
+                    className="text-[16px] font-bold font-medium text-blue-primary hover:underline uppercase tracking-widest"
                   >
                     ＋ add script
                   </button>
@@ -1100,11 +1153,11 @@ export default function App() {
                 className={`h-6 px-3 flex items-center gap-2 rounded cursor-pointer transition-all border ${
                   activeShellId === tab.id 
                     ? 'bg-bg2 border-blue-primary/50 text-blue-primary' 
-                    : 'border-transparent text-txt3 hover:bg-bg2/50'
+                    : 'border-transparent text-txt3 font-medium hover:bg-bg2/50'
                 }`}
               >
                 <input 
-                  className="bg-transparent border-none outline-none text-[9px] font-bold uppercase tracking-widest w-16 text-center"
+                  className="bg-transparent border-none outline-none text-[13px] font-medium font-bold uppercase tracking-widest w-16 text-center"
                   value={tab.name}
                   onChange={(e) => renameShellTab(tab.id, e.target.value)}
                   onClick={(e) => e.stopPropagation()}
@@ -1118,14 +1171,14 @@ export default function App() {
             ))}
             <button 
               onClick={addShellTab}
-              className="p-1.5 text-txt3 hover:text-blue-primary transition-colors"
+              className="p-1.5 text-txt3 font-medium hover:text-blue-primary transition-colors"
             >
               <Plus size={14} />
             </button>
             <button 
               onClick={togglePiP}
               title="Open in Picture-in-Picture"
-              className="p-1.5 text-txt3 hover:text-green-primary transition-colors ml-auto"
+              className="p-1.5 text-txt3 font-medium hover:text-green-primary transition-colors ml-auto"
             >
               <MonitorPlay size={14} />
             </button>
@@ -1141,8 +1194,8 @@ export default function App() {
             ))}
             {!hasTerminalActivity && (
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                <div className="text-txt3/10 text-2xl font-black uppercase tracking-[4px] mb-2 text-center px-8">nothing going on cause no fuking work</div>
-                <div className="text-txt3/5 text-[8px] uppercase tracking-widest">Type directly to interact</div>
+                <div className="text-txt3 font-medium/10 text-2xl font-black uppercase tracking-[4px] mb-2 text-center px-8">nothing going on cause no fuking work</div>
+                <div className="text-txt3 font-medium/5 text-[16px] font-bold font-medium uppercase tracking-widest">Type directly to interact</div>
               </div>
             )}
           </div>
@@ -1163,23 +1216,23 @@ export default function App() {
                 className="bg-bg1 border border-bd rounded-xl w-full max-w-xs overflow-hidden shadow-2xl"
               >
                 <div className="h-10 bg-bg2 border-b border-bd flex items-center justify-between px-4">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-txt">Add Favorite Script</span>
-                  <X size={14} className="text-txt3 cursor-pointer hover:text-txt" onClick={() => setIsAddingScript(false)} />
+                  <span className="text-[15px] font-medium font-bold uppercase tracking-widest text-txt">Add Favorite Script</span>
+                  <X size={14} className="text-txt3 font-medium cursor-pointer hover:text-txt" onClick={() => setIsAddingScript(false)} />
                 </div>
                 <div className="p-4 space-y-3">
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Name</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Name</label>
                     <input 
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-blue-primary"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-blue-primary"
                       value={newScript.name}
                       onChange={e => setNewScript({...newScript, name: e.target.value})}
                       placeholder="e.g. build app"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Command</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Command</label>
                     <input 
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-blue-primary"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-blue-primary"
                       value={newScript.cmd}
                       onChange={e => setNewScript({...newScript, cmd: e.target.value})}
                       placeholder="e.g. npm run build"
@@ -1193,7 +1246,7 @@ export default function App() {
                       setIsAddingScript(false);
                       setNewScript({ name: '', cmd: '', icon: '⚡' });
                     }}
-                    className="w-full h-10 bg-blue-primary text-black font-bold text-[10px] tracking-widest rounded-lg mt-2"
+                    className="w-full h-10 bg-blue-primary text-black font-bold text-[15px] font-medium tracking-widest rounded-lg mt-2"
                   >
                     ADD TO FAVORITES
                   </button>
@@ -1217,18 +1270,18 @@ export default function App() {
               <Zap size={40} className="text-blue-primary relative z-10" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-txt font-bold tracking-[5px] uppercase text-sm">X11 GUI Bridge</h2>
-              <p className="text-txt3 text-[10px] max-w-[240px] leading-relaxed">
+              <h2 className="text-txt font-bold tracking-[5px] uppercase text-base font-medium">X11 GUI Bridge</h2>
+              <p className="text-txt3 font-medium text-[15px] font-medium max-w-[240px] leading-relaxed">
                 Connect to a high-performance X11 server to run Linux GUI apps (VS Code, Firefox, etc.) directly in your rig.
               </p>
             </div>
             
             <div className="bg-bg1 border border-bd rounded-lg p-4 w-full max-w-sm space-y-3">
-              <div className="flex items-center gap-2 text-[8px] text-blue-primary font-bold tracking-widest uppercase">
+              <div className="flex items-center gap-2 text-[16px] font-bold font-medium text-blue-primary font-bold tracking-widest uppercase">
                 <Zap size={10} />
                 <span>Manual Setup Instructions</span>
               </div>
-              <div className="bg-black rounded p-3 font-mono text-[9px] text-green-primary text-left break-all">
+              <div className="bg-black rounded p-3 font-mono text-[13px] font-medium text-green-primary text-left break-all">
                 # 1. Install termux-x11<br/>
                 pkg install termux-x11-nightly<br/><br/>
                 # 2. Start X11 server in Shell<br/>
@@ -1241,7 +1294,7 @@ export default function App() {
                 setIsX11Active(true);
                 setNotifications(prev => [...prev, { id: Math.random().toString(), message: 'X11 Bridge Initialized' }]);
               }}
-              className="px-8 h-12 bg-blue-primary text-black font-bold text-[10px] tracking-[4px] rounded-xl hover:opacity-90 transition-opacity"
+              className="px-8 h-12 bg-blue-primary text-black font-bold text-[15px] font-medium tracking-[4px] rounded-xl hover:opacity-90 transition-opacity"
             >
               START X11 SERVER
             </button>
@@ -1251,11 +1304,11 @@ export default function App() {
             <div className="h-8 bg-bg2 border-b border-bd flex items-center px-3 justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-primary animate-pulse" />
-                <span className="text-[8px] text-txt3 font-mono uppercase tracking-widest">X11:1 · 1920x1080 · 60FPS</span>
+                <span className="text-[16px] font-bold font-medium text-txt3 font-medium font-mono uppercase tracking-widest">X11:1 · 1920x1080 · 60FPS</span>
               </div>
               <button 
                 onClick={() => setIsX11Active(false)}
-                className="text-[8px] text-red-500 font-bold hover:underline"
+                className="text-[16px] font-bold font-medium text-red-500 font-bold hover:underline"
               >
                 DISCONNECT
               </button>
@@ -1265,14 +1318,14 @@ export default function App() {
               <div className="w-full h-full bg-[url('https://picsum.photos/seed/circuit/1920/1080')] bg-cover bg-center opacity-40" />
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <Monitor size={64} className="text-white/10 mb-4" />
-                <span className="text-white/20 font-mono text-xs tracking-[5px]">DISPLAY_STREAM_ACTIVE</span>
+                <span className="text-white/20 font-mono text-base font-medium font-medium tracking-[5px]">DISPLAY_STREAM_ACTIVE</span>
               </div>
               
               {/* Floating Controls */}
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button className="h-8 px-4 bg-black/80 border border-white/10 rounded text-[9px] text-white font-bold tracking-widest">KEYBOARD</button>
-                <button className="h-8 px-4 bg-black/80 border border-white/10 rounded text-[9px] text-white font-bold tracking-widest">MOUSE</button>
-                <button className="h-8 px-4 bg-black/80 border border-white/10 rounded text-[9px] text-white font-bold tracking-widest">RESIZE</button>
+                <button className="h-8 px-4 bg-black/80 border border-white/10 rounded text-[13px] font-medium text-white font-bold tracking-widest">KEYBOARD</button>
+                <button className="h-8 px-4 bg-black/80 border border-white/10 rounded text-[13px] font-medium text-white font-bold tracking-widest">MOUSE</button>
+                <button className="h-8 px-4 bg-black/80 border border-white/10 rounded text-[13px] font-medium text-white font-bold tracking-widest">RESIZE</button>
               </div>
             </div>
           </div>
@@ -1288,39 +1341,39 @@ export default function App() {
         <div className="bg-bg1 border border-bd rounded-xl overflow-hidden shadow-lg">
           <div className="h-10 bg-bg2 border-b border-bd flex items-center px-4 gap-2">
             <Monitor size={14} className="text-green-primary" />
-            <span className="text-[10px] tracking-[3px] text-txt uppercase font-bold">System Dashboard</span>
+            <span className="text-[15px] font-medium tracking-[3px] text-txt uppercase font-bold">System Dashboard</span>
           </div>
-          <div className="p-4 bg-black font-mono text-[9px] space-y-1">
+          <div className="p-4 bg-black font-mono text-[13px] font-medium space-y-1">
             <div className="flex justify-between border-b border-bd/30 pb-1 mb-2">
-              <span className="text-txt3">SYSTEM: TERMINTEL-RIG-V2</span>
+              <span className="text-txt3 font-medium">SYSTEM: TERMINTEL-RIG-V2</span>
               <span className="text-green-primary">ONLINE</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
               <div className="flex justify-between">
-                <span className="text-txt3">CPU:</span>
+                <span className="text-txt3 font-medium">CPU:</span>
                 <span className="text-txt">12.4%</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-txt3">MEM:</span>
+                <span className="text-txt3 font-medium">MEM:</span>
                 <span className="text-txt">1.2GB / 8GB</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-txt3">TUNNEL:</span>
+                <span className="text-txt3 font-medium">TUNNEL:</span>
                 <span className={authToken ? "text-blue-primary" : "text-red-500"}>{authToken ? "CONNECTED" : "DISCONNECTED"}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-txt3">UPTIME:</span>
+                <span className="text-txt3 font-medium">UPTIME:</span>
                 <span className="text-txt">04:22:11</span>
               </div>
             </div>
             <div className="mt-3 pt-2 border-t border-bd/30">
               <div className="flex items-center gap-2">
                 <div className="w-1 h-1 rounded-full bg-green-primary animate-pulse" />
-                <span className="text-[8px] text-green-primary/70">CLAW_TUNNEL: LISTENING ON PORT 8080</span>
+                <span className="text-[16px] font-bold font-medium text-green-primary/70">CLAW_TUNNEL: LISTENING ON PORT 8080</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-1 h-1 rounded-full bg-blue-primary animate-pulse" />
-                <span className="text-[8px] text-blue-primary/70">WEBHOOK: READY FOR INCOMING PAYLOADS</span>
+                <span className="text-[16px] font-bold font-medium text-blue-primary/70">WEBHOOK: READY FOR INCOMING PAYLOADS</span>
               </div>
             </div>
           </div>
@@ -1330,13 +1383,13 @@ export default function App() {
         <div className="bg-bg1 border border-bd rounded-xl overflow-hidden shadow-lg">
           <div className="h-10 bg-bg2 border-b border-bd flex items-center px-4 gap-2">
             <Cpu size={14} className="text-green-primary" />
-            <span className="text-[10px] tracking-[3px] text-txt uppercase font-bold">System Management</span>
+            <span className="text-[15px] font-medium tracking-[3px] text-txt uppercase font-bold">System Management</span>
           </div>
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between p-3 bg-bg2 border border-bd2 rounded-lg">
               <div className="flex flex-col">
-                <span className="text-[10px] text-txt font-bold tracking-wider">X11 GUI BRIDGE</span>
-                <span className="text-[8px] text-txt3 uppercase tracking-widest">Toggle X11 socket for GUI apps</span>
+                <span className="text-[15px] font-medium text-txt font-bold tracking-wider">X11 GUI BRIDGE</span>
+                <span className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Toggle X11 socket for GUI apps</span>
               </div>
               <button 
                 onClick={() => {
@@ -1352,10 +1405,10 @@ export default function App() {
             <div className="flex items-center justify-between p-3 bg-bg2 border border-bd2 rounded-lg">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-txt font-bold tracking-wider">PROOT GUEST SANDBOX</span>
-                  <span className="text-[7px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-500 rounded font-bold">UNROOTED</span>
+                  <span className="text-[15px] font-medium text-txt font-bold tracking-wider">PROOT GUEST SANDBOX</span>
+                  <span className="text-[15px] font-medium font-medium px-1.5 py-0.5 bg-yellow-500/20 text-yellow-500 rounded font-bold">UNROOTED</span>
                 </div>
-                <span className="text-[8px] text-txt3 uppercase tracking-widest">Isolated Ubuntu/Arch environment</span>
+                <span className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Isolated Ubuntu/Arch environment</span>
               </div>
               <button 
                 onClick={() => {
@@ -1374,9 +1427,9 @@ export default function App() {
                 animate={{ opacity: 1, height: 'auto' }}
                 className="bg-black/40 border border-green-primary/20 rounded-lg p-3 space-y-2"
               >
-                <div className="flex items-center justify-between text-[8px] font-mono">
+                <div className="flex items-center justify-between text-[16px] font-bold font-medium font-mono">
                   <span className="text-green-primary">GUEST_OS: UBUNTU_22.04</span>
-                  <span className="text-txt3">VNC_PORT: 5901</span>
+                  <span className="text-txt3 font-medium">VNC_PORT: 5901</span>
                 </div>
                 <div className="h-1 bg-bd rounded-full overflow-hidden">
                   <motion.div 
@@ -1386,7 +1439,7 @@ export default function App() {
                     className="h-full bg-green-primary"
                   />
                 </div>
-                <p className="text-[7px] text-txt3 italic">Sandbox is isolated from host system. Use for experimental dev.</p>
+                <p className="text-[15px] font-medium font-medium text-txt3 font-medium italic">Sandbox is isolated from host system. Use for experimental dev.</p>
               </motion.div>
             )}
           </div>
@@ -1397,7 +1450,7 @@ export default function App() {
           <div className="h-10 bg-bg2 border-b border-bd flex items-center px-4 justify-between">
             <div className="flex items-center gap-2">
               <Box size={14} className="text-blue-primary" />
-              <span className="text-[10px] tracking-[3px] text-txt uppercase font-bold">Custom Endpoints</span>
+              <span className="text-[15px] font-medium tracking-[3px] text-txt uppercase font-bold">Custom Endpoints</span>
             </div>
           </div>
           <div className="p-4 space-y-4">
@@ -1407,15 +1460,15 @@ export default function App() {
                   <span className="text-lg text-green-primary">{api.icon || '⚡'}</span>
                   <span className="text-[11px] text-txt font-bold flex-1 uppercase tracking-wider">{api.name}</span>
                   {(api.apiKey || api.secondaryToken) && (
-                    <span className="text-[7px] px-1 bg-green-primary/10 text-green-primary border border-green-primary/20 rounded font-bold">SECURED</span>
+                    <span className="text-[15px] font-medium font-medium px-1 bg-green-primary/10 text-green-primary border border-green-primary/20 rounded font-bold">SECURED</span>
                   )}
-                  <span className="text-[8px] px-2 py-0.5 rounded border border-blue-primary/30 text-blue-primary uppercase font-bold tracking-tighter">{api.type}</span>
+                  <span className="text-[16px] font-bold font-medium px-2 py-0.5 rounded border border-blue-primary/30 text-blue-primary uppercase font-bold tracking-tighter">{api.type}</span>
                 </div>
                 {editingEndpoint === api.id ? (
                   <div className="space-y-2 mt-2">
                     <div className="grid grid-cols-2 gap-2">
                       <input 
-                        className="bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary"
+                        className="bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary"
                         value={api.host}
                         onChange={(e) => {
                           const next = [...endpoints];
@@ -1426,7 +1479,7 @@ export default function App() {
                         placeholder="Host"
                       />
                       <input 
-                        className="bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary"
+                        className="bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary"
                         value={api.port}
                         onChange={(e) => {
                           const next = [...endpoints];
@@ -1438,7 +1491,7 @@ export default function App() {
                       />
                     </div>
                     <input 
-                      className="w-full bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary"
+                      className="w-full bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary"
                       value={api.model}
                       onChange={(e) => {
                         const next = [...endpoints];
@@ -1450,7 +1503,7 @@ export default function App() {
                     />
                     <input 
                       type="password"
-                      className="w-full bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary"
+                      className="w-full bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary"
                       value={api.secondaryToken}
                       onChange={(e) => {
                         const next = [...endpoints];
@@ -1462,7 +1515,7 @@ export default function App() {
                     />
                     {(api.type === 'SSH Tunneling' || api.type === 'SSH + Docker') && (
                       <textarea 
-                        className="w-full bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary font-mono h-16 resize-none"
+                        className="w-full bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary font-mono h-16 resize-none"
                         value={api.sshKey}
                         onChange={(e) => {
                           const next = [...endpoints];
@@ -1475,7 +1528,7 @@ export default function App() {
                     )}
                     {(api.type === 'Docker' || api.type === 'SSH + Docker') && (
                       <input 
-                        className="w-full bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary font-mono"
+                        className="w-full bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary font-mono"
                         value={api.containerId}
                         onChange={(e) => {
                           const next = [...endpoints];
@@ -1487,7 +1540,7 @@ export default function App() {
                       />
                     )}
                     <button 
-                      className="w-full h-8 bg-blue-primary text-black text-[9px] font-bold tracking-wider rounded"
+                      className="w-full h-8 bg-blue-primary text-black text-[13px] font-medium font-bold tracking-wider rounded"
                       onClick={() => {
                         if (validateEndpoint(api)) {
                           setEditingEndpoint(null);
@@ -1499,12 +1552,12 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    <div className="text-[9px] text-txt3 font-mono">{api.host}:{api.port} · {api.model || 'No Model'}</div>
+                    <div className="text-[13px] font-medium text-txt3 font-medium font-mono">{api.host}:{api.port} · {api.model || 'No Model'}</div>
                     {discoveredModels[api.id] && discoveredModels[api.id].length > 0 && (
                       <div className="mt-2">
-                        <label className="text-[7px] text-txt3 uppercase tracking-widest mb-1 block">Select Model</label>
+                        <label className="text-[15px] font-medium font-medium text-txt3 font-medium uppercase tracking-widest mb-1 block">Select Model</label>
                         <select 
-                          className="w-full bg-bg border border-bd rounded p-1.5 text-[9px] text-txt outline-none focus:border-blue-primary font-mono"
+                          className="w-full bg-bg border border-bd rounded p-1.5 text-[13px] font-medium text-txt outline-none focus:border-blue-primary font-mono"
                           value={api.model}
                           onChange={(e) => {
                             const next = [...endpoints];
@@ -1521,25 +1574,25 @@ export default function App() {
                       </div>
                     )}
                     {api.containerId && (
-                      <div className="text-[8px] text-blue-primary mt-1 font-mono uppercase tracking-tighter">
+                      <div className="text-[16px] font-bold font-medium text-blue-primary mt-1 font-mono uppercase tracking-tighter">
                         Container: {api.containerId}
                       </div>
                     )}
                     {api.sshKey && (
-                      <div className="text-[8px] text-green-primary mt-1 font-mono uppercase tracking-tighter">
+                      <div className="text-[16px] font-bold font-medium text-green-primary mt-1 font-mono uppercase tracking-tighter">
                         SSH Key: Configured
                       </div>
                     )}
-                    {api.notes && <div className="text-[8px] text-txt3 mt-1 italic">"{api.notes}"</div>}
+                    {api.notes && <div className="text-[16px] font-bold font-medium text-txt3 font-medium mt-1 italic">"{api.notes}"</div>}
                     <div className="flex gap-2 mt-3">
                       <button 
-                        className="flex-1 h-8 border border-bd2 text-txt2 text-[9px] tracking-wider rounded hover:border-blue-primary hover:text-blue-primary transition-colors uppercase font-bold"
+                        className="flex-1 h-8 border border-bd2 text-txt2 text-[13px] font-medium tracking-wider rounded hover:border-blue-primary hover:text-blue-primary transition-colors uppercase font-bold"
                         onClick={() => setEditingEndpoint(api.id)}
                       >
                         EDIT
                       </button>
                       <button 
-                        className="flex-1 h-8 bg-blue-primary text-black text-[9px] font-bold tracking-wider rounded hover:opacity-80 transition-opacity uppercase"
+                        className="flex-1 h-8 bg-blue-primary text-black text-[13px] font-medium font-bold tracking-wider rounded hover:opacity-80 transition-opacity uppercase"
                         onClick={() => syncModels(api)}
                       >
                         SYNC
@@ -1557,7 +1610,7 @@ export default function App() {
             ))}
             <button 
               onClick={() => setIsAddingEndpoint(true)}
-              className="w-full h-12 border border-dashed border-blue-primary/50 text-blue-primary text-[10px] font-bold tracking-[4px] rounded-xl hover:bg-blue-primary/5 transition-colors flex items-center justify-center gap-2"
+              className="w-full h-12 border border-dashed border-blue-primary/50 text-blue-primary text-[15px] font-medium font-bold tracking-[4px] rounded-xl hover:bg-blue-primary/5 transition-colors flex items-center justify-center gap-2"
             >
               ＋ ENDPOINT
             </button>
@@ -1581,20 +1634,20 @@ export default function App() {
                 <div className="h-12 bg-bg2 border-b border-bd flex items-center justify-between px-4">
                   <div className="flex items-center gap-2">
                     <ChevronRight size={14} className="text-green-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-[3px] text-txt">Add New Endpoint</span>
+                    <span className="text-[15px] font-medium font-bold uppercase tracking-[3px] text-txt">Add New Endpoint</span>
                   </div>
-                  <X size={16} className="text-txt3 cursor-pointer hover:text-txt" onClick={() => setIsAddingEndpoint(false)} />
+                  <X size={16} className="text-txt3 font-medium cursor-pointer hover:text-txt" onClick={() => setIsAddingEndpoint(false)} />
                 </div>
                 <div className="p-6 space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="space-y-1 shrink-0">
-                      <label className="text-[8px] text-txt3 uppercase tracking-widest">Icon</label>
+                      <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Icon</label>
                       <div className="grid grid-cols-5 gap-1 bg-bg border border-bd p-1 rounded">
                         {['⚡', '◉', '⬡', '◈', '▣', '◎', '⚙', '⚗', '🔒', '🛡️'].map(icon => (
                           <button 
                             key={icon}
                             onClick={() => setNewEndpoint({...newEndpoint, icon})}
-                            className={`w-6 h-6 flex items-center justify-center text-xs rounded transition-colors ${newEndpoint.icon === icon ? 'bg-blue-primary text-black' : 'text-txt3 hover:text-txt'}`}
+                            className={`w-6 h-6 flex items-center justify-center text-base font-medium font-medium rounded transition-colors ${newEndpoint.icon === icon ? 'bg-blue-primary text-black' : 'text-txt3 font-medium hover:text-txt'}`}
                           >
                             {icon}
                           </button>
@@ -1602,9 +1655,9 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex-1 space-y-1">
-                      <label className="text-[8px] text-txt3 uppercase tracking-widest">Name</label>
+                      <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Name</label>
                       <input 
-                        className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary"
+                        className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary"
                         value={newEndpoint.name}
                         onChange={e => setNewEndpoint({...newEndpoint, name: e.target.value})}
                         placeholder="My Custom Server"
@@ -1613,9 +1666,9 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Type</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Type</label>
                     <select 
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary"
                       value={newEndpoint.type}
                       onChange={e => setNewEndpoint({...newEndpoint, type: e.target.value})}
                     >
@@ -1636,18 +1689,18 @@ export default function App() {
 
                   <div className="grid grid-cols-3 gap-4">
                     <div className="col-span-2 space-y-1">
-                      <label className="text-[8px] text-txt3 uppercase tracking-widest">Host</label>
+                      <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Host</label>
                       <input 
-                        className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                        className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                         value={newEndpoint.host}
                         onChange={e => setNewEndpoint({...newEndpoint, host: e.target.value})}
                         placeholder="localhost"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] text-txt3 uppercase tracking-widest">Port</label>
+                      <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Port</label>
                       <input 
-                        className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                        className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                         value={newEndpoint.port}
                         onChange={e => setNewEndpoint({...newEndpoint, port: e.target.value})}
                         placeholder="11434"
@@ -1656,9 +1709,9 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Model (optional)</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Model (optional)</label>
                     <input 
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                       value={newEndpoint.model}
                       onChange={e => setNewEndpoint({...newEndpoint, model: e.target.value})}
                       placeholder="qwen3.5:0.8b"
@@ -1666,10 +1719,10 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">API Key (optional)</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">API Key (optional)</label>
                     <input 
                       type="password"
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                       value={newEndpoint.apiKey}
                       onChange={e => setNewEndpoint({...newEndpoint, apiKey: e.target.value})}
                       placeholder="••••••••••••"
@@ -1678,9 +1731,9 @@ export default function App() {
 
                   {(newEndpoint.type === 'SSH Tunneling' || newEndpoint.type === 'SSH + Docker') && (
                     <div className="space-y-1">
-                      <label className="text-[8px] text-txt3 uppercase tracking-widest">SSH Private Key (optional)</label>
+                      <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">SSH Private Key (optional)</label>
                       <textarea 
-                        className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono h-20 resize-none"
+                        className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono h-20 resize-none"
                         value={newEndpoint.sshKey}
                         onChange={e => setNewEndpoint({...newEndpoint, sshKey: e.target.value})}
                         placeholder="-----BEGIN RSA PRIVATE KEY-----"
@@ -1690,9 +1743,9 @@ export default function App() {
 
                   {(newEndpoint.type === 'Docker' || newEndpoint.type === 'SSH + Docker') && (
                     <div className="space-y-1">
-                      <label className="text-[8px] text-txt3 uppercase tracking-widest">Container ID / Name</label>
+                      <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Container ID / Name</label>
                       <input 
-                        className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                        className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                         value={newEndpoint.containerId}
                         onChange={e => setNewEndpoint({...newEndpoint, containerId: e.target.value})}
                         placeholder="e.g. t2i-terminal-rig"
@@ -1701,9 +1754,9 @@ export default function App() {
                   )}
 
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Quantization (optional)</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Quantization (optional)</label>
                     <input 
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                       value={newEndpoint.quantization}
                       onChange={e => setNewEndpoint({...newEndpoint, quantization: e.target.value})}
                       placeholder="e.g. Q4_K_M, airllm"
@@ -1711,10 +1764,10 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Secondary Token / Password (optional)</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Secondary Token / Password (optional)</label>
                     <input 
                       type="password"
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary font-mono"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary font-mono"
                       value={newEndpoint.secondaryToken}
                       onChange={e => setNewEndpoint({...newEndpoint, secondaryToken: e.target.value})}
                       placeholder="••••••••••••"
@@ -1722,9 +1775,9 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[8px] text-txt3 uppercase tracking-widest">Notes</label>
+                    <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Notes</label>
                     <textarea 
-                      className="w-full bg-bg border border-bd rounded p-2 text-[10px] text-txt outline-none focus:border-green-primary h-20 resize-none"
+                      className="w-full bg-bg border border-bd rounded p-2 text-[15px] font-medium text-txt outline-none focus:border-green-primary h-20 resize-none"
                       value={newEndpoint.notes}
                       onChange={e => setNewEndpoint({...newEndpoint, notes: e.target.value})}
                       placeholder="Additional details..."
@@ -1734,7 +1787,7 @@ export default function App() {
                   <div className="flex gap-3 pt-2">
                     <button 
                       onClick={() => setIsAddingEndpoint(false)}
-                      className="flex-1 h-10 border border-bd2 text-txt2 font-bold text-[10px] tracking-widest rounded-lg"
+                      className="flex-1 h-10 border border-bd2 text-txt2 font-bold text-[15px] font-medium tracking-widest rounded-lg"
                     >
                       CANCEL
                     </button>
@@ -1747,7 +1800,7 @@ export default function App() {
                           setNewEndpoint({ name: '', type: 'API', host: 'localhost', port: '8080', model: '', apiKey: '', secondaryToken: '', sshKey: '', containerId: '', notes: '', quantization: '', icon: '⚡' });
                         }
                       }}
-                      className="flex-1 h-10 bg-green-primary text-black font-bold text-[10px] tracking-widest rounded-lg"
+                      className="flex-1 h-10 bg-green-primary text-black font-bold text-[15px] font-medium tracking-widest rounded-lg"
                     >
                       ADD ENDPOINT
                     </button>
@@ -1762,28 +1815,28 @@ export default function App() {
         <div className="bg-bg1 border border-bd rounded-xl overflow-hidden shadow-lg">
           <div className="h-10 bg-bg2 border-b border-bd flex items-center px-4 gap-2">
             <Globe size={14} className="text-blue-primary" />
-            <span className="text-[10px] tracking-[3px] text-txt uppercase font-bold">Tunnel & Webhook Settings</span>
+            <span className="text-[15px] font-medium tracking-[3px] text-txt uppercase font-bold">Tunnel & Webhook Settings</span>
           </div>
           <div className="p-4 space-y-4">
             <div className="space-y-2">
-              <label className="text-[8px] text-txt3 uppercase tracking-widest">Auth Token (Claw/QR)</label>
+              <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Auth Token (Claw/QR)</label>
               <div className="flex gap-2">
                 <input 
                   type="password"
-                  className="flex-1 bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary font-mono"
+                  className="flex-1 bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary font-mono"
                   value={authToken}
                   onChange={(e) => setAuthToken(e.target.value)}
                   placeholder="Enter token or scan QR..."
                 />
-                <button className="px-3 bg-bg2 border border-bd2 text-txt2 text-[9px] rounded hover:border-blue-primary">
+                <button className="px-3 bg-bg2 border border-bd2 text-txt2 text-[13px] font-medium rounded hover:border-blue-primary">
                   SCAN QR
                 </button>
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[8px] text-txt3 uppercase tracking-widest">Termux Webhook URL</label>
+              <label className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Termux Webhook URL</label>
               <input 
-                className="w-full bg-bg text-txt border border-bd2 text-[10px] p-2 rounded outline-none focus:border-blue-primary font-mono"
+                className="w-full bg-bg text-txt border border-bd2 text-[15px] font-medium p-2 rounded outline-none focus:border-blue-primary font-mono"
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 placeholder="https://your-termux-webhook.com/api/hook"
@@ -1798,7 +1851,7 @@ export default function App() {
                   setNotifications(prev => [...prev, { id: Math.random().toString(), message: 'Git Update Complete' }]);
                 }, 2000);
               }}
-              className="w-full h-10 bg-blue-primary text-black text-[9px] font-bold tracking-widest rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              className="w-full h-10 bg-blue-primary text-black text-[13px] font-medium font-bold tracking-widest rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
             >
               <RefreshCw size={14} className={isUpdating ? 'animate-spin' : ''} />
               {isUpdating ? 'UPDATING...' : 'GIT UPDATE (PULL)'}
@@ -1809,25 +1862,25 @@ export default function App() {
         {/* Privacy & Compliance */}
         <div className="bg-bg1 border border-bd rounded-xl overflow-hidden shadow-lg">
           <div className="h-10 bg-bg2 border-b border-bd flex items-center px-4 gap-2">
-            <Lock size={14} className="text-txt3" />
-            <span className="text-[10px] tracking-[3px] text-txt uppercase font-bold">Privacy & Compliance</span>
+            <Lock size={14} className="text-txt3 font-medium" />
+            <span className="text-[15px] font-medium tracking-[3px] text-txt uppercase font-bold">Privacy & Compliance</span>
           </div>
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <button className="h-10 bg-bg2 border border-bd2 rounded text-[8px] text-txt3 uppercase tracking-widest hover:text-txt transition-colors">Privacy Policy</button>
-              <button className="h-10 bg-bg2 border border-bd2 rounded text-[8px] text-txt3 uppercase tracking-widest hover:text-txt transition-colors">Terms of Service</button>
+              <button className="h-10 bg-bg2 border border-bd2 rounded text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest hover:text-txt transition-colors">Privacy Policy</button>
+              <button className="h-10 bg-bg2 border border-bd2 rounded text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest hover:text-txt transition-colors">Terms of Service</button>
             </div>
             <div className="p-3 bg-black/40 border border-bd2 rounded-lg space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[8px] text-txt3 uppercase tracking-widest">Data Usage</span>
-                <span className="text-[8px] text-green-primary uppercase font-bold">Local Only</span>
+                <span className="text-[16px] font-bold font-medium text-txt3 font-medium uppercase tracking-widest">Data Usage</span>
+                <span className="text-[16px] font-bold font-medium text-green-primary uppercase font-bold">Local Only</span>
               </div>
-              <p className="text-[7px] text-txt3 leading-relaxed">
-                T2I is designed with a "Local First" philosophy. Your code, keys, and data remain on your device or your private rig. We do not store your data on our servers.
+              <p className="text-[15px] font-medium font-medium text-txt3 font-medium leading-relaxed">
+                Terminal to Intel is designed with a "Local First" philosophy. Your code, keys, and data remain on your device or your private rig. We do not store your data on our servers.
               </p>
             </div>
             <div className="text-center">
-              <span className="text-[7px] text-txt3 uppercase tracking-[4px]">Build Version 2.0.4-stable</span>
+              <span className="text-[15px] font-medium font-medium text-txt3 font-medium uppercase tracking-[4px]">Build Version 2.0.4-stable</span>
             </div>
           </div>
         </div>
@@ -1836,7 +1889,7 @@ export default function App() {
         <div className="bg-bg1 border border-bd rounded-xl overflow-hidden shadow-lg">
           <div className="h-10 bg-bg2 border-b border-bd flex items-center px-4 gap-2">
             <Zap size={14} className="text-yellow-500" />
-            <span className="text-[10px] tracking-[3px] text-txt uppercase font-bold">Quick Install Reference</span>
+            <span className="text-[15px] font-medium tracking-[3px] text-txt uppercase font-bold">Quick Install Reference</span>
           </div>
           <div className="p-4 space-y-3">
             {[
@@ -1845,19 +1898,19 @@ export default function App() {
               { label: 'BUN', cmd: 'bun install -g t2i-terminal-rig' },
               { label: 'APT (Debian/Ubuntu)', cmd: 'sudo apt install t2i' },
               { label: 'TERMUX (Android)', cmd: 'pkg install t2i' },
-              { label: 'F-DROID', cmd: 'Search "T2I" in F-Droid' }
+              { label: 'F-DROID', cmd: 'Search "Terminal to Intel" in F-Droid' }
             ].map((item, i) => (
               <div key={i} className="bg-bg2 border border-bd2 rounded-lg p-2 flex items-center justify-between group">
                 <div className="flex flex-col">
-                  <span className="text-[7px] text-txt3 uppercase tracking-widest mb-1">{item.label}</span>
-                  <code className="text-[9px] text-green-primary font-mono">{item.cmd}</code>
+                  <span className="text-[15px] font-medium font-medium text-txt3 font-medium uppercase tracking-widest mb-1">{item.label}</span>
+                  <code className="text-[13px] font-medium text-green-primary font-mono">{item.cmd}</code>
                 </div>
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(item.cmd);
                     setNotifications(prev => [...prev, { id: Math.random().toString(), message: 'Copied to clipboard' }]);
                   }}
-                  className="p-1.5 text-txt3 hover:text-blue-primary transition-colors opacity-0 group-hover:opacity-100"
+                  className="p-1.5 text-txt3 font-medium hover:text-blue-primary transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Save size={12} />
                 </button>
@@ -1888,7 +1941,7 @@ export default function App() {
             className="bg-black/80 border border-white/10 p-4 rounded-lg shadow-xl text-white flex items-center gap-3 min-w-[200px]"
           >
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-sm font-mono">{n.message}</span>
+            <span className="text-base font-medium font-mono">{n.message}</span>
           </motion.div>
         ))}
       </div>
@@ -1899,17 +1952,17 @@ export default function App() {
           <div className="w-5 h-5 bg-blue-primary rounded flex items-center justify-center">
             <Zap size={12} className="text-black fill-current" />
           </div>
-          <span className="text-blue-primary text-xs font-bold tracking-[3px]">TERMINTEL</span>
+          <span className="text-blue-primary text-base font-medium font-medium font-bold tracking-[3px]">TERMINTEL</span>
         </div>
-        <span className="text-bd3 text-xs">|</span>
-        <span className="text-txt2 text-[9px] tracking-wider flex-1 truncate">
-          {curPage === 'editor' ? files[curFileIdx].name : 
+        <span className="text-bd3 text-base font-medium font-medium">|</span>
+        <span className="text-txt2 text-[13px] font-medium tracking-wider flex-1 truncate">
+          {curPage === 'editor' ? files[curFileIdx]?.name || 'No File Selected' : 
            curPage === 'shell' ? shellTabs.find(t => t.id === activeShellId)?.name : 
            curPage === 'display' ? 'X11 GUI Bridge' :
            'System Settings'}
         </span>
         {curPage === 'editor' && (
-          <span className={`text-[8px] tracking-[2px] px-2 py-0.5 rounded font-bold shrink-0 ${
+          <span className={`text-[16px] font-bold font-medium tracking-[2px] px-2 py-0.5 rounded font-bold shrink-0 ${
             vimMode === 'NORMAL' ? 'bg-blue-primary text-black' : 
             vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
             'bg-purple-primary text-white'
@@ -1917,7 +1970,7 @@ export default function App() {
             {vimMode}
           </span>
         )}
-        <span className="text-[9px] text-txt3 shrink-0">{time}</span>
+        <span className="text-[13px] font-medium text-txt3 font-medium shrink-0">{time}</span>
       </div>
 
       {/* Pages */}
@@ -1950,15 +2003,15 @@ export default function App() {
                 <button 
                   key={item.id}
                   onClick={() => setCurPage(item.id as PageType)}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${curPage === item.id ? 'text-blue-primary' : 'text-txt3'}`}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${curPage === item.id ? 'text-blue-primary' : 'text-txt3 font-medium'}`}
                 >
                   <div className="text-lg">{item.icon}</div>
-                  <span className="text-[7px] tracking-wider font-mono">{item.label}</span>
+                  <span className="text-[15px] font-medium font-medium tracking-wider font-mono">{item.label}</span>
                 </button>
               ))}
               <button 
                 onClick={() => setIsNavMinimized(true)}
-                className="w-8 flex items-center justify-center text-txt3 hover:text-blue-primary"
+                className="w-8 flex items-center justify-center text-txt3 font-medium hover:text-blue-primary"
               >
                 <ChevronRight size={14} className="rotate-90" />
               </button>
@@ -1978,13 +2031,13 @@ export default function App() {
                   {curPage === 'display' && <Monitor size={14} />}
                   {curPage === 'settings' && <Settings size={14} />}
                 </div>
-                <span className="text-[8px] tracking-[2px] text-txt2 uppercase font-bold">{curPage}</span>
+                <span className="text-[16px] font-bold font-medium tracking-[2px] text-txt2 uppercase font-bold">{curPage}</span>
               </div>
               <button 
                 onClick={() => setIsNavMinimized(false)}
-                className="text-txt3 hover:text-blue-primary flex items-center gap-1"
+                className="text-txt3 font-medium hover:text-blue-primary flex items-center gap-1"
               >
-                <span className="text-[7px] tracking-widest uppercase">Expand</span>
+                <span className="text-[15px] font-medium font-medium tracking-widest uppercase">Expand</span>
                 <ChevronRight size={14} className="-rotate-90" />
               </button>
             </motion.div>

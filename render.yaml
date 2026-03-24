@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: t2i-terminal
+    env: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        generateValue: true
