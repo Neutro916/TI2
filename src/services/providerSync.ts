@@ -42,6 +42,33 @@ export class ProviderSync {
       }
     }
     
+    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter') {
+      try {
+        const isOpenRouter = endpoint.host.includes('openrouter.ai');
+        const url = `https://${endpoint.host}${endpoint.port === '443' ? '' : ':' + endpoint.port}/v1/models`;
+        const headers: Record<string, string> = {
+          'Authorization': `Bearer ${endpoint.apiKey}`,
+          'Content-Type': 'application/json'
+        };
+        if (isOpenRouter) {
+          headers['HTTP-Referer'] = 'https://ais-dev-kneag7xeubv4up2nfgbavl-41696233443.us-east1.run.app';
+          headers['X-Title'] = 'T2I Terminal';
+        }
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        return data.data.map((m: any) => ({
+          id: m.id,
+          name: m.id,
+          provider: endpoint.type,
+          status: 'LIVE'
+        }));
+      } catch (e) {
+        console.error(`${endpoint.type} discovery failed`, e);
+        return [];
+      }
+    }
+
     if (endpoint.type === 'Gemini') {
       return [
         { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', provider: 'Gemini', status: 'LIVE' },
@@ -59,7 +86,7 @@ export class ProviderSync {
     freqDivisor: number,
     tools: any[] = []
   ): Promise<{ text: string, functionCalls?: any[] }> {
-    const systemInstruction = `You are TermIntel AI. Frequency Awareness: ${freqDivisor} Hz divisor active. Understand Reality Forge geometry. Use tools if available.`;
+    const systemInstruction = `You are T2I AI (Terminal to Intel). Frequency Awareness: ${freqDivisor} Hz divisor active. Understand Reality Forge geometry. Use tools if available.`;
 
     if (endpoint.type === 'Gemini') {
       const response = await this.ai.models.generateContent({
@@ -89,6 +116,37 @@ export class ProviderSync {
       });
       const data = await res.json();
       return { text: data.response || 'No response from Ollama' };
+    }
+
+    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter') {
+      try {
+        const url = `https://${endpoint.host}${endpoint.port === '443' ? '' : ':' + endpoint.port}/v1/chat/completions`;
+        const headers: Record<string, string> = {
+          'Authorization': `Bearer ${endpoint.apiKey}`,
+          'Content-Type': 'application/json'
+        };
+        if (endpoint.host.includes('openrouter.ai')) {
+          headers['HTTP-Referer'] = 'https://ais-dev-kneag7xeubv4up2nfgbavl-41696233443.us-east1.run.app';
+          headers['X-Title'] = 'T2I Terminal';
+        }
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: endpoint.model,
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: prompt }
+            ]
+          })
+        });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        return { text: data.choices[0].message.content || 'No response from API' };
+      } catch (e) {
+        console.error(`${endpoint.type} generation failed`, e);
+        return { text: `Error: ${e instanceof Error ? e.message : String(e)}` };
+      }
     }
 
     return { text: 'Provider not supported' };

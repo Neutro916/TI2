@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * TermIntel v2 - Universal Bridge Script
- * Run this in Termux or on your PC to give the TermIntel web app access to your local files.
+ * T2I terminal to Intel - Universal Bridge Script
+ * Run this in Termux or on your PC to give the T2I web app access to your local files.
  * 
  * Usage:
- * 1. npx termintel-rig
- * 2. Paste the printed IP into TermIntel's Host settings.
+ * 1. npx t2i-terminal-to-intel
+ * 2. Paste the printed IP into T2I's Host settings.
  */
 
 const express = require('express');
@@ -28,10 +28,10 @@ app.use(bodyParser.json());
 const ROOT = process.cwd();
 
 // Static serving for the web app (if built)
-const DIST_PATH = path.join(__dirname, 'dist');
+const DIST_PATH = path.join(__dirname, '../../dist');
 if (require('fs').existsSync(DIST_PATH)) {
   app.use(express.static(DIST_PATH));
-  console.log(`[TermIntel Bridge] Serving web UI from: ${DIST_PATH}`);
+  console.log(`[T2I Bridge] Serving web UI from: ${DIST_PATH}`);
 }
 
 // IP Discovery
@@ -112,17 +112,17 @@ app.post('/api/shell', async (req, res) => {
 function startServer(port) {
   const server = app.listen(port, '0.0.0.0', () => {
     const ip = getLocalIP();
-    console.log(`\n🚀 TermIntel Bridge Live on http://${ip}:${port}`);
-    console.log(`🔗 Paste this into your TermIntel UI to sync.\n`);
-    console.log(`[TermIntel Bridge] Exposing: ${ROOT}`);
+    console.log(`\n🚀 T2I Bridge Live on http://${ip}:${port}`);
+    console.log(`🔗 Paste this into your T2I UI to sync.\n`);
+    console.log(`[T2I Bridge] Exposing: ${ROOT}`);
   });
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.log(`[TermIntel Bridge] Port ${port} taken, trying ${port + 1}...`);
+      console.log(`[T2I Bridge] Port ${port} taken, trying ${port + 1}...`);
       startServer(port + 1);
     } else {
-      console.error(`[TermIntel Bridge] Error: ${err.message}`);
+      console.error(`[T2I Bridge] Error: ${err.message}`);
     }
   });
 }

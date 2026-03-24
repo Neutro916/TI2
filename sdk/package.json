@@ -1,0 +1,15 @@
+{
+  "name": "@t2i/sdk",
+  "version": "1.0.0",
+  "description": "T2I terminal to Intel - CLI SDK and Bridge",
+  "main": "bin/t2i-bridge.js",
+  "bin": {
+    "t2i-bridge": "bin/t2i-bridge.js",
+    "t2i": "bin/t2i-cli.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.6",
+    "body-parser": "^2.2.2"
+  }
+}

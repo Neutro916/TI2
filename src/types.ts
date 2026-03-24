@@ -16,10 +16,16 @@ export interface Endpoint {
   type: string;
   host: string;
   port: string;
-  proto: string;
-  model: string;
-  status: 'LIVE' | 'IDLE' | 'API';
+  model?: string;
   apiKey?: string;
+  secondaryToken?: string;
+  sshKey?: string;
+  containerId?: string;
+  notes?: string;
+  quantization?: string;
+  status: 'LIVE' | 'IDLE' | 'API';
+  icon?: string;
+  isProvider?: boolean;
 }
 
 export interface BridgeConfig {
@@ -42,6 +48,6 @@ export interface Message {
   thinking?: string;
 }
 
-export type PageType = 'editor' | 'shell' | 'monitor' | 'settings';
+export type PageType = 'editor' | 'shell' | 'display' | 'settings';
 export type VimMode = 'NORMAL' | 'INSERT' | 'VISUAL' | 'COMMAND';
 export type ChatMode = 'aider' | 'chat' | 'freq';

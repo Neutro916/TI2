@@ -1,4 +1,4 @@
-const CACHE_NAME = 'termintel-v1';
+const CACHE_NAME = 't2i-v1';
 const ASSETS = [
   '/',
   '/index.html',
@@ -19,4 +19,10 @@ self.addEventListener('fetch', (event) => {
       return response || fetch(event.request);
     })
   );
+});
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-terminal-data') {
+    console.log('Background sync triggered');
+  }
 });

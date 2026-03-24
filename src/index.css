@@ -4,21 +4,21 @@
 @theme {
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-bg: #000;
-  --color-bg1: #070d16;
-  --color-bg2: #0b1622;
-  --color-bg3: #0f1e30;
-  --color-bg4: #14273d;
+  --color-bg: var(--bg);
+  --color-bg1: var(--bg1);
+  --color-bg2: var(--bg2);
+  --color-bg3: var(--bg3);
+  --color-bg4: var(--bg4);
   
-  --color-bd: #162338;
-  --color-bd2: #1e3352;
-  --color-bd3: #2a4870;
+  --color-bd: var(--bd);
+  --color-bd2: var(--bd2);
+  --color-bd3: var(--bd3);
   
-  --color-txt: #bdd0e8;
-  --color-txt2: #6a8aaa;
-  --color-txt3: #304a65;
+  --color-txt: var(--txt);
+  --color-txt2: var(--txt2);
+  --color-txt3: var(--txt3);
   
-  --color-blue-primary: #1a9fff;
+  --color-blue-primary: var(--primary);
   --color-lblue: #4fc3f7;
   --color-dblue: #0d6eaa;
   
@@ -34,8 +34,40 @@
 }
 
 @layer base {
+  :root {
+    --bg: #000;
+    --bg1: #000;
+    --bg2: #050505;
+    --bg3: #080808;
+    --bg4: #0a0a0a;
+    --bd: #111;
+    --bd2: #1a1a1a;
+    --bd3: #222;
+    --txt: #e0e0e0;
+    --txt2: #888;
+    --txt3: #444;
+    --primary: #0070f3;
+  }
+
+  .light {
+    --bg: #f5f7fa;
+    --bg1: #ffffff;
+    --bg2: #e4e9f2;
+    --bg3: #dbe2ef;
+    --bg4: #cfd9e8;
+    --bd: #d1d9e6;
+    --bd2: #b8c5d6;
+    --bd3: #a0b1c7;
+    --txt: #1a2a3a;
+    --txt2: #4a5a6a;
+    --txt3: #8a9aaa;
+    --primary: #0070f3;
+  }
+
   body {
-    @apply bg-bg text-txt font-mono select-none;
+    background-color: var(--bg);
+    color: var(--txt);
+    @apply font-mono select-none transition-colors duration-300;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);

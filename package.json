@@ -1,11 +1,11 @@
 {
-  "name": "termintel-rig",
+  "name": "t2i-terminal-to-intel",
   "version": "1.0.0",
   "description": "Mobile-first AI Orchestration Rig",
-  "main": "bridge.js",
+  "main": "sdk/bin/t2i-bridge.js",
   "bin": {
-    "termintel": "./bridge.js",
-    "ti": "./ti.js"
+    "t2i": "sdk/bin/t2i-bridge.js",
+    "ti": "sdk/bin/t2i-cli.js"
   },
   "scripts": {
     "dev": "tsx server.ts",

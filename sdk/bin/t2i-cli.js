@@ -31,14 +31,14 @@ const options = {
 
 const req = http.request(options, (res) => {
   if (res.statusCode === 200) {
-    console.log(`[TermIntel] Command '${command}' sent to App.`);
+    console.log(`[T2I] Command '${command}' sent to App.`);
   } else {
-    console.error(`[TermIntel] Failed to send command: ${res.statusCode}`);
+    console.error(`[T2I] Failed to send command: ${res.statusCode}`);
   }
 });
 
 req.on('error', (error) => {
-  console.error(`[TermIntel] Error: ${error.message}`);
+  console.error(`[T2I] Error: ${error.message}`);
 });
 
 req.write(data);

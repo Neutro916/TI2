@@ -1,5 +1,5 @@
 {
-  "name": "TermIntel v2",
+  "name": "T2I terminal to Intel",
   "description": "A mobile-first IDE and AI orchestration rig with integrated terminal and AI assistant.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["camera", "microphone", "geolocation", "background-sync", "picture-in-picture"]
 }

@@ -1,19 +1,19 @@
 {
-  "name": "TermIntel Rig",
-  "short_name": "TermIntel",
+  "name": "T2I terminal to Intel",
+  "short_name": "T2I",
   "description": "Mobile-first AI Orchestration Rig",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
-  "theme_color": "#1a9fff",
+  "theme_color": "#0070f3",
   "icons": [
     {
-      "src": "https://picsum.photos/seed/termintel/192/192",
+      "src": "https://picsum.photos/seed/t2i/192/192",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://picsum.photos/seed/termintel/512/512",
+      "src": "https://picsum.photos/seed/t2i/512/512",
       "sizes": "512x512",
       "type": "image/png"
     }
