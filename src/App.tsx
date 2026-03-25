@@ -159,9 +159,14 @@ export default function App() {
       { name: 'ollama serve', cmd: 'ollama serve', icon: '◉' },
     ]},
     { category: 'CLAW/CODE', items: [
+      { name: 'g++ build', cmd: 'g++ main.cpp -o main && ./main', icon: '⚙' },
       { name: 'claudecode', cmd: 'claudecode', icon: '🤖' },
       { name: 'openclaw', cmd: 'openclaw', icon: '🦞' },
       { name: 'opencode', cmd: 'opencode .', icon: '⌨' },
+    ]},
+    { category: 'GEMINI/ANTIGRAVITY', items: [
+      { name: 'gemini cli', cmd: 'gemini-cli', icon: '✨' },
+      { name: 'antigravity', cmd: 'echo "Antigravity Agent Ready"', icon: '🌟' },
     ]},
     { category: 'NETWORK', items: [
       { name: 'ngrok :3000', cmd: 'ngrok http 3000', icon: '↻' },
@@ -630,14 +635,16 @@ export default function App() {
     if (file.lang === 'txt' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
       return <span>{line}</span>;
     }
-    // Simple regex-based syntax highlighting for JS/TS
+    // Regex-based syntax highlighting for JS/TS/Py/C++
     const tokens = [
-      { regex: /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|interface|type|async|await)\b/g, color: 'var(--color-purple-primary)' },
-      { regex: /\b(true|false|null|undefined)\b/g, color: 'var(--color-orange-primary)' },
+      { regex: /(#include|#define|#if|#ifdef|#ifndef|#else|#elif|#endif|#pragma|#error|#warning|#undef)\b/g, color: 'var(--color-yellow-primary)' },
+      { regex: /\b(int|char|float|double|void|bool|long|short|signed|unsigned|struct|union|enum|typedef|sizeof|auto|static|extern|register|volatile|const|restrict|return|if|else|switch|case|default|break|continue|for|while|do|goto|template|typename|class|public|private|protected|virtual|friend|inline|explicit|this|new|delete|operator|try|catch|throw|namespace|using)\b/g, color: 'var(--color-purple-primary)' },
+      { regex: /\b(let|var|function|import|export|from|extends|interface|type|async|await|def|str|dict|list|set|tuple|print)\b/g, color: 'var(--color-purple-primary)' },
+      { regex: /\b(true|false|null|undefined|None|True|False)\b/g, color: 'var(--color-orange-primary)' },
       { regex: /\b(\d+)\b/g, color: 'var(--color-orange-primary)' },
-      { regex: /(".*?"|'.*?'|`.*?`)/g, color: 'var(--color-green-primary)' },
-      { regex: /(\/\/.*$)/g, color: 'var(--color-txt3)' },
-      { regex: /\b(console|window|document|Math|JSON)\b/g, color: 'var(--color-cyan-primary)' },
+      { regex: /(".*?"|'.*?'|`.*?`|<.*?>)/g, color: 'var(--color-green-primary)' },
+      { regex: /(\/\/.*$|\/\*[\s\S]*?\*\/|# .*$)/g, color: 'var(--color-txt3)' },
+      { regex: /\b(console|window|document|Math|JSON|std|cout|cin|endl|vector|string|map|printf|scanf)\b/g, color: 'var(--color-cyan-primary)' },
     ];
 
     let segments: { text: string, color?: string }[] = [{ text: line }];
@@ -693,7 +700,7 @@ export default function App() {
         newFiles.push({
           name: file.name,
           lang: ext,
-          color: ext === 'js' ? 'var(--color-yellow-primary)' : ext === 'py' ? 'var(--color-blue-primary)' : 'var(--color-txt2)',
+          color: ext === 'js' ? 'var(--color-yellow-primary)' : ext === 'py' ? 'var(--color-blue-primary)' : (ext === 'c' || ext === 'cpp' || ext === 'h') ? 'var(--color-cyan-primary)' : 'var(--color-txt2)',
           raw: content
         });
         if (newFiles.length === filesArray.length) {
