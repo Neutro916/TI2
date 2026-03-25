@@ -64,7 +64,11 @@ def main():
         "https://github.com/Neutro916/nameless-memo",
         "https://github.com/Neutro916/nemo-ai-dien-kernel",
         "https://github.com/Neutro916/reality-forge-1",
-        "https://github.com/Neutro916/Junk"
+        "https://github.com/Neutro916/Junk",
+        "https://github.com/Neutro916/CONDUCTOR",
+        "https://github.com/Neutro916/MFish-great",
+        "https://github.com/Neutro916/shannon-T",
+        "https://github.com/Neutro916/TI2"
     ]
     
     style_dataset_entries = []
