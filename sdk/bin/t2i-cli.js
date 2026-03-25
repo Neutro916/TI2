@@ -20,7 +20,7 @@ const data = JSON.stringify({ type: command, payload });
 
 const options = {
   hostname: 'localhost',
-  port: 3000,
+  port: 8888,
   path: '/api/app/command',
   method: 'POST',
   headers: {

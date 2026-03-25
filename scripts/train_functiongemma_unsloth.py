@@ -108,6 +108,14 @@ def main():
         {"text": "<|im_start|>user\nIndex the 50 SATA drive array and cross-reference with our Letta agent orchestration log.<|im_end|>\n<|im_start|>assistant\n<function_call>{\"name\": \"spawn_moltbot_monk\", \"arguments\": {\"specialty\": \"Data Indexer\", \"container_name\": \"monk_letta_indexer\", \"task\": \"Index SATA array and parse Letta orchestration logs\"}}</function_call><|im_end|>"}
     ])
 
+    # 5. Inject V4.8 Optimized Dataset (Neural Sync Phase)
+    v48_path = "./scripts/neural_dataset_v48.jsonl"
+    if os.path.exists(v48_path):
+        print("Injecting V4.8 Unified Core Patterns...")
+        with open(v48_path, "r", encoding="utf-8") as f:
+            for line in f:
+                style_dataset_entries.append({"text": line.strip()})
+    
     print(f"✅ Compiled {len(style_dataset_entries)} files and custom schemas to learn your OS workflow!")
 
     from datasets import Dataset

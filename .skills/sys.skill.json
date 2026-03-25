@@ -1,0 +1,16 @@
+{
+  "name": "sys_core",
+  "description": "System-level orchestration via Winget, Wget, and Apt.",
+  "tools": [
+    {
+      "name": "install_tool",
+      "description": "Execute autonomous package installation.",
+      "cmd": "winget install {{pkg}}"
+    },
+    {
+      "name": "fetch_web",
+      "description": "Pull raw web content for local indexing.",
+      "cmd": "wget {{url}}"
+    }
+  ]
+}
