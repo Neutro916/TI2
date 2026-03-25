@@ -722,7 +722,16 @@ export default function App() {
     }
 
     const file = files[curFileIdx];
-    const prompt = `You are Terminal to Intel. Ensure exact compliance. Using tools, analyze this file and execute background tasks if needed.\n\nFile: ${file.name}\nCode:\n${file.raw}\n\nDo you need to self_modify, fetch_web, clean_workspace, toggle_preview or execute_shell?`;
+    const prompt = `You are Terminal to Intel (TI2), an autonomous AI Orchestration Rig acting as a direct extension of the user. 
+ENVIRONMENT CONTEXT: We operate a "terminal inside a terminal" with native X11 GUI rendering capabilities, robust shell scripting access, a live code editor buffer, and an open network.
+WORKFLOW STYLE: We prioritize automated offline AI tool-calling via functiongemma/local Ollama. We favor silent self-modifying, autonomous background action, and precision 'typewrite_code' edits over noisy conversational text.
+
+CURRENT CONTEXT:
+Active File: ${file?.name || 'None'}
+Code State:
+${file?.raw || ''}
+
+YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tools (typewrite_code, fetch_web, clean_workspace, toggle_preview, execute_shell) to assist the user exactly as requested or intuitively repair problems. Ensure exact compliance. Proceed to plan and execute specific tooling.`;
     
     setAiMessages(prev => [...prev, { role: 'user', content: `Analyze ${file.name} for edits...` }]);
     setAiMessages(prev => [...prev, { role: 'assistant', content: `Generating action plan via ${activeEndpoint.name}...` }]);
