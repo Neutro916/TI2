@@ -757,6 +757,28 @@ export default function App() {
             required: ['command']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'clean_workspace',
+          description: 'Closes all openly loaded files right now in the editor and clears the IDE workspace to a clean state.',
+          parameters: { type: 'object', properties: {} }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'toggle_preview',
+          description: 'Opens or closes the Live Preview panel for HTML/CSS rendering of the current file.',
+          parameters: {
+            type: 'object',
+            properties: {
+              show: { type: 'boolean', description: 'True to open preview, false to close preview' }
+            },
+            required: ['show']
+          }
+        }
       }
     ];
 
@@ -781,6 +803,15 @@ export default function App() {
             setNotifications(prev => [...prev, { id: Math.random().toString(), message: `AI Executing: ${call.args.command}` }]);
           } else if (call.name === 'fetch_web') {
              setAiLog(l => [...l, `[FETCH] Pulling data from ${call.args.url}`]);
+          } else if (call.name === 'clean_workspace') {
+             setFiles([]);
+             setCurFileIdx(-1);
+             setIsModified(false);
+             setShowPreview(false);
+             setAiLog(l => [...l, `[OK] Workspace fully cleaned.`]);
+          } else if (call.name === 'toggle_preview') {
+             setShowPreview(call.args.show);
+             setAiLog(l => [...l, `[OK] Live Preview ${call.args.show ? 'Enabled' : 'Disabled'}.`]);
           }
         }
       } else {
