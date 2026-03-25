@@ -58,12 +58,45 @@ def main():
         use_rslora = False,
         loftq_config = None,
     )
+    # 4. Clone User Repositories to build Personal Coding Style Dataset
+    print("\n--- Compiling Personal Workflow Dataset ---")
+    repos = [
+        "https://github.com/Neutro916/nameless-memo",
+        "https://github.com/Neutro916/nemo-ai-dien-kernel",
+        "https://github.com/Neutro916/reality-forge-1",
+        "https://github.com/Neutro916/Junk"
+    ]
     
-    # 4. Define formatting for the TI2 Execution Loop
-    # Assumes dataset has standard OpenAI-style tool calls for fetch_web, execute_shell, self_modify
-    # dataset = load_dataset("json", data_files="tool_logs.jsonl", split="train")
+    style_dataset_entries = []
+    
+    for repo in repos:
+        repo_name = repo.split("/")[-1]
+        print(f"Cloning {repo_name}...")
+        os.system(f"git clone {repo} ./repos/{repo_name} --quiet")
+        
+        # Traverse repo to build SFTTrainer dataset pairs
+        for root, dirs, files in os.walk(f"./repos/{repo_name}"):
+            for file in files:
+                if file.endswith((".py", ".ts", ".tsx", ".js", ".md", ".json")):
+                    try:
+                        filepath = os.path.join(root, file)
+                        with open(filepath, "r", encoding="utf-8") as f:
+                            content = f.read()
+                            # We use <|im_start|> tags (ChatML) which Unsloth natively parses for Gemma models if configured!
+                            if len(content) > 50:
+                                style_dataset_entries.append({
+                                    "text": f"<|im_start|>user\nReplicate my personal coding style for '{file}'.<|im_end|>\n<|im_start|>assistant\n```\n{content}\n```<|im_end|>"
+                                })
+                    except Exception:
+                        pass
+                        
+    print(f"✅ Compiled {len(style_dataset_entries)} files to learn your coding style!")
+
+    from datasets import Dataset
+    custom_dataset = Dataset.from_list(style_dataset_entries)
 
     print("\n--- Model structure created. Ready for SFTTrainer Integration ---\n")
+    # You can now pass `train_dataset = custom_dataset` to your Unsloth SFTTrainer!
     print("When training completes, export the GGUF layout back to Terminal to Intel using:")
     print("model.save_pretrained_gguf('functiongemma-ti-custom', tokenizer, quantization_method = 'q4_k_m')")
 
