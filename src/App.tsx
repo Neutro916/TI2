@@ -255,6 +255,8 @@ export default function App() {
     { id: 'ollama-local', name: 'Local Ollama', type: 'Ollama', host: typeof window !== 'undefined' ? window.location.hostname : 'localhost', port: '11434', apiKey: '', status: 'IDLE', icon: '◉', isProvider: false },
     { id: 'lmstudio-local', name: 'Local LMStudio', type: 'LMStudio', host: typeof window !== 'undefined' ? window.location.hostname : 'localhost', port: '1234', apiKey: '', status: 'IDLE', icon: '⚡', isProvider: false },
     { id: 'mobile-rig-tunnel', name: 'Mobile AI Rig Tunnel', type: 'Ollama', host: '192.168.1.50', port: '11434', apiKey: '', notes: 'Change host to your phone IP for local offloading', status: 'IDLE', icon: '📱', isProvider: false },
+    { id: 'huggingface', name: 'HuggingFace (Unsloth Base)', type: 'API', host: 'api-inference.huggingface.co', port: '443', apiKey: '', status: 'IDLE', icon: '🤗', isProvider: true },
+    { id: 'kaggle', name: 'Kaggle Models', type: 'API', host: 'kaggle.com/api/v1/models', port: '443', apiKey: '', status: 'IDLE', icon: 'K', isProvider: true },
   ]);
 
   // Auto-sync Rig models on startup
@@ -750,6 +752,21 @@ export default function App() {
       {
         type: 'function',
         function: {
+          name: 'typewrite_code',
+          description: 'Typewrite or append new lines of code specifically at a line index instead of replacing the entire file.',
+          parameters: {
+            type: 'object',
+            properties: {
+              target_line: { type: 'number', description: 'The line number to start inserting the code at (use -1 to append to end).' },
+              code_chunk: { type: 'string', description: 'The code chunk to typewrite or inject.' }
+            },
+            required: ['target_line', 'code_chunk']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'execute_shell',
           description: 'Run a bash/terminal command in the background shell',
           parameters: {
@@ -807,6 +824,20 @@ export default function App() {
             setNotifications(prev => [...prev, { id: Math.random().toString(), message: `AI Executing Shell: ${call.args.command}` }]);
           } else if (call.name === 'fetch_web') {
              setAiMessages(prev => [...prev, { role: 'assistant', content: `[FETCH] Queued internal data pipeline for ${call.args.url}` }]);
+          } else if (call.name === 'typewrite_code') {
+             const next = [...files];
+             const lines = next[curFileIdx].raw.split('\n');
+             const target = call.args.target_line;
+             const chunk = call.args.code_chunk;
+             if (target === -1 || target > lines.length) {
+               next[curFileIdx].raw += '\n' + chunk;
+             } else {
+               lines.splice(Math.max(0, target - 1), 0, chunk);
+               next[curFileIdx].raw = lines.join('\n');
+             }
+             setFiles(next);
+             setIsModified(true);
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[OK] Code selectively appended at Line ${target === -1 ? 'End' : target}.` }]);
           } else if (call.name === 'clean_workspace') {
              setFiles([]);
              setCurFileIdx(-1);
@@ -1065,21 +1096,8 @@ export default function App() {
                 onChange={handleFolderUpload} 
               />
             </label>
-            <div className="flex items-center justify-center px-3 text-[16px] font-bold font-medium text-blue-primary cursor-pointer hover:bg-blue-primary/10 border-l border-bd font-bold tracking-widest" onClick={simulateAiEdit}>
-              <Zap size={12} className="mr-1" /> AI SCAN
-            </div>
             <div className={`flex items-center justify-center px-3 text-[16px] font-bold font-medium cursor-pointer border-l border-bd font-bold tracking-widest ${showPreview ? 'bg-blue-primary text-black' : 'text-txt3 font-medium hover:text-txt'}`} onClick={() => setShowPreview(!showPreview)}>
               <Monitor size={12} className="mr-1" /> PREVIEW
-            </div>
-            <div 
-              className="flex items-center justify-center px-3 text-[16px] font-bold font-medium text-blue-primary cursor-pointer hover:bg-blue-primary/10 border-l border-bd font-bold tracking-widest"
-              onClick={() => {
-                const next = [...favScripts];
-                next[0].items.push({ name: file.name, cmd: `node ${file.name}`, icon: '⚡' });
-                setFavScripts(next);
-              }}
-            >
-              <Plus size={12} className="mr-1" /> FAV
             </div>
           </div>
           
