@@ -264,6 +264,8 @@ export default function App() {
     { id: 'kaggle', name: 'Kaggle Models', type: 'API', host: 'kaggle.com/api/v1/models', port: '443', apiKey: '', status: 'IDLE', icon: 'K', isProvider: true },
   ]);
 
+  const [selectedEndpointId, setSelectedEndpointId] = useState<string>('ollama-local');
+
   // Auto-sync Rig models on startup
   useEffect(() => {
     const autoSync = async () => {
@@ -715,9 +717,9 @@ export default function App() {
     if (curFileIdx === -1 || !files[curFileIdx]) return;
     
     setShowAiSidebar(true);
-    const activeEndpoint = endpoints.find(e => e.apiKey || e.type === 'Ollama');
+    const activeEndpoint = endpoints.find(e => e.id === selectedEndpointId);
     if (!activeEndpoint) {
-      setAiMessages(prev => [...prev, {role: 'assistant', content: 'ERR: No active AI endpoint found. Configure in Settings.'}]);
+      setAiMessages(prev => [...prev, {role: 'assistant', content: 'ERR: Selected AI endpoint not found or inactive. Configure network in Settings.'}]);
       return;
     }
 
@@ -1210,7 +1212,15 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
                         <div className="h-10 bg-bg1 border-b border-bd flex items-center px-4 justify-between shrink-0">
                           <div className="flex items-center gap-2">
                             <Sparkles size={14} className="text-blue-primary" />
-                            <span className="text-[13px] font-bold text-txt font-medium uppercase tracking-widest">FunctionGemma</span>
+                            <select 
+                              className="bg-transparent text-[13px] font-bold text-blue-primary font-medium uppercase tracking-widest outline-none cursor-pointer max-w-[140px] truncate"
+                              value={selectedEndpointId}
+                              onChange={e => setSelectedEndpointId(e.target.value)}
+                            >
+                              {endpoints.filter(e => e.apiKey || e.type === 'Ollama' || e.type === 'LMStudio').map(e => (
+                                <option key={e.id} value={e.id} className="bg-bg1 text-txt font-sans normal-case">{e.name}</option>
+                              ))}
+                            </select>
                           </div>
                           <X size={14} className="text-txt3 font-medium cursor-pointer hover:text-red-primary transition-colors" onClick={() => setShowAiSidebar(false)} />
                         </div>
