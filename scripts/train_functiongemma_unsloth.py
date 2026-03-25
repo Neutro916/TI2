@@ -90,7 +90,16 @@ def main():
                     except Exception:
                         pass
                         
-    print(f"✅ Compiled {len(style_dataset_entries)} files to learn your coding style!")
+    print("Injecting Custom Swarm & Ubuntu Tools Examples...")
+    style_dataset_entries.extend([
+        {"text": "<|im_start|>user\nAdd a task to check the MFish predictor node.<|im_end|>\n<|im_start|>assistant\n<function_call>{\"name\": \"manage_todos\", \"arguments\": {\"action\": \"add\", \"task_text\": \"Check MFish Predictor\"}}</function_call><|im_end|>"},
+        {"text": "<|im_start|>user\nComplete task ID 2.<|im_end|>\n<|im_start|>assistant\n<function_call>{\"name\": \"manage_todos\", \"arguments\": {\"action\": \"complete\", \"task_id\": 2}}</function_call><|im_end|>"},
+        {"text": "<|im_start|>user\nAsk CONDUCTOR about the RAG implementation.<|im_end|>\n<|im_start|>assistant\n<function_call>{\"name\": \"delegate_to_swarm\", \"arguments\": {\"target_agent\": \"CONDUCTOR_RAG\", \"task_query\": \"Explain RAG implementation details\"}}</function_call><|im_end|>"},
+        {"text": "<|im_start|>user\nTake a screenshot of the Ubuntu desktop.<|im_end|>\n<|im_start|>assistant\n<function_call>{\"name\": \"use_computer\", \"arguments\": {\"action\": \"screenshot\"}}</function_call><|im_end|>"},
+        {"text": "<|im_start|>user\nPredict market trends using the Swarm.<|im_end|>\n<|im_start|>assistant\n<function_call>{\"name\": \"delegate_to_swarm\", \"arguments\": {\"target_agent\": \"MFish_Predictor\", \"task_query\": \"Predict current market trends using vortex math\"}}</function_call><|im_end|>"}
+    ])
+
+    print(f"✅ Compiled {len(style_dataset_entries)} files and custom schemas to learn your OS workflow!")
 
     from datasets import Dataset
     custom_dataset = Dataset.from_list(style_dataset_entries)
