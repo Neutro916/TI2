@@ -251,6 +251,7 @@ export default function App() {
 
   const [chatMode, setChatMode] = useState<ChatMode>('aider');
   const [ctxActive, setCtxActive] = useState<Set<string>>(new Set(['file']));
+  const [activeTabType, setActiveTabType] = useState<'file'|'shell'>('file');
 
   const [endpoints, setEndpoints] = useState<Endpoint[]>([
     { id: 'openai', name: 'OpenAI', type: 'API', host: 'api.openai.com', port: '443', apiKey: '', status: 'IDLE', icon: '◉', isProvider: true },
@@ -789,6 +790,22 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
       {
         type: 'function',
         function: {
+          name: 'use_computer',
+          description: 'Leverage Python/Node physical desktop bindings to operate Linux Ubuntu instances autonomously (take_screenshot, mouse_click, type_keyboard).',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: { type: 'string', enum: ['screenshot', 'click', 'type', 'key'], description: 'Physical action to execute' },
+              text: { type: 'string', description: 'Text to type, if applicable' },
+              coordinate: { type: 'array', items: { type: 'number' }, description: 'X,Y coordinate array for click events' }
+            },
+            required: ['action']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'manage_todos',
           description: 'Add, complete, or clear a task on the internal rig Todo list to track long-term multi-step actions.',
           parameters: {
@@ -1039,7 +1056,7 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
     const lines = (file && typeof file.raw === 'string') ? file.raw.split('\n') : ["No data available"];
     
     return (
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* File Rail (Premium Source Control) */}
         <AnimatePresence>
           {showFileRail && (
@@ -1430,16 +1447,18 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
             )}
           </div>
 
-          {/* Vim Bar */}
-          <div className={`h-6 flex items-center px-3 gap-3 shrink-0 text-[13px] font-medium font-bold transition-colors ${
-            vimMode === 'NORMAL' ? 'bg-blue-primary text-black' : 
-            vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
-            'bg-purple-primary text-white'
-          }`}>
-            <span className="tracking-widest min-w-[60px]">{vimMode}</span>
-            <span className="opacity-80">{file?.name || 'NONE'} {file && (isModified || file.name === '.gitignore') ? '[+]' : ''}</span>
-            <span className="ml-auto opacity-50">{curLine}/{lines.length} {Math.round((curLine/lines.length)*100)}%</span>
-          </div>
+          {/* Vim Bar (only visible for File Editor) */}
+          {activeTabType === 'file' && (
+            <div className={`h-6 flex items-center px-3 gap-3 shrink-0 text-[13px] font-medium font-bold transition-colors ${
+              vimMode === 'NORMAL' ? 'bg-blue-primary text-black' : 
+              vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
+              'bg-purple-primary text-white'
+            }`}>
+              <span className="tracking-widest min-w-[60px]">{vimMode}</span>
+              <span className="opacity-80">{file?.name || 'NONE'} {file && (isModified || file.name === '.gitignore') ? '[+]' : ''}</span>
+              <span className="ml-auto opacity-50">{curLine}/{lines.length} {Math.round((curLine/lines.length)*100)}%</span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2329,20 +2348,13 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
 
       {/* Topbar */}
       <div className="h-11 pt-[env(safe-area-inset-top,0px)] bg-bg1 border-b border-bd flex items-center px-3 gap-2 shrink-0 select-none z-50">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-1">
           <div className="w-5 h-5 bg-blue-primary rounded flex items-center justify-center">
             <Zap size={12} className="text-black fill-current" />
           </div>
-          <span className="text-blue-primary text-base font-medium font-medium font-bold tracking-[3px]">TERMINTEL</span>
+          <span className="text-blue-primary text-base font-medium font-medium font-bold tracking-[3px]">T2I</span>
         </div>
-        <span className="text-bd3 text-base font-medium font-medium">|</span>
-        <span className="text-txt2 text-[13px] font-medium tracking-wider flex-1 truncate">
-          {curPage === 'editor' ? files[curFileIdx]?.name || 'No File Selected' : 
-           curPage === 'shell' ? shellTabs.find(t => t.id === activeShellId)?.name : 
-           curPage === 'display' ? 'X11 GUI Bridge' :
-           'System Settings'}
-        </span>
-        {curPage === 'editor' && (
+        {curPage === 'editor' && activeTabType === 'file' && (
           <span className={`text-[16px] font-bold font-medium tracking-[2px] px-2 py-0.5 rounded font-bold shrink-0 ${
             vimMode === 'NORMAL' ? 'bg-blue-primary text-black' : 
             vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
@@ -2376,18 +2388,23 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
               className="flex-1 flex"
             >
               {[
-                { id: 'editor', label: 'EDITOR', icon: <Code2 size={16} /> },
-                { id: 'shell', label: 'SHELL', icon: <TerminalIcon size={16} /> },
+                { id: 'editor', label: 'WORKSPACE', icon: <Code2 size={16} /> },
+                { id: 'ai_chat', label: 'AI CHAT', icon: <Sparkles size={16} /> },
                 { id: 'display', label: 'DISPLAY', icon: <Monitor size={16} /> },
                 { id: 'settings', label: 'SETTINGS', icon: <Settings size={16} /> }
-              ].map(item => (
+              ].map((item, keyIdx) => (
                 <button 
-                  key={item.id}
-                  onClick={() => setCurPage(item.id as PageType)}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${curPage === item.id ? 'text-blue-primary' : 'text-txt3 font-medium'}`}
+                  key={keyIdx}
+                  onClick={() => {
+                    if (item.id === 'ai_chat') setShowAiSidebar(prev => !prev);
+                    else setCurPage(item.id as PageType);
+                  }}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                    (curPage === item.id) || (item.id === 'ai_chat' && showAiSidebar) ? 'text-blue-primary bg-bg shadow-[inset_0_2px_0_rgba(var(--color-blue-primary),1)]' : 'text-txt3 font-medium hover:bg-bg/50'
+                  }`}
                 >
-                  <div className="text-lg">{item.icon}</div>
-                  <span className="text-[15px] font-medium font-medium tracking-wider font-mono">{item.label}</span>
+                  <div className={`text-lg transition-transform ${(item.id === 'ai_chat' && showAiSidebar) ? 'scale-110' : ''}`}>{item.icon}</div>
+                  <span className="text-[12px] font-black tracking-widest font-mono uppercase">{item.label}</span>
                 </button>
               ))}
               <button 
