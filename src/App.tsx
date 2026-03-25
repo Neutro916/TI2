@@ -130,7 +130,7 @@ export default function App() {
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
           <Zap size={18} className="text-primary fill-primary animate-pulse" />
-          <h1 className="text-[14px] font-black tracking-[3px] text-white">T2I-RIG <span className="text-txt3">V4.8</span></h1>
+          <h1 className="text-[14px] font-black tracking-[3px] text-white">T2I-RIG <span className="text-resonance">:: TI2</span></h1>
         </div>
         <div className="hidden md:flex items-center gap-4 px-3 py-1 bg-black/40 border border-white/5 rounded-lg text-[10px] font-mono text-primary">
           {TUNNEL_URL} <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -220,15 +220,23 @@ export default function App() {
        {/* System Config */}
        <div className="space-y-4 pt-8 border-t border-white/5">
           <div className="flex items-center gap-3"><Layers size={18} className="text-resonance" /> <span className="text-sm font-black tracking-[4px] text-white uppercase opacity-70">SYSTEM CONFIGURATION</span></div>
-          <div className="bg-bg1 border border-white/5 rounded-2xl p-6 space-y-6">
-             <div className="flex justify-between items-center">
-                <div><div className="text-sm font-bold text-white">Tunnel Convenience</div><div className="text-xs text-txt3">Auto-route localport mapping</div></div>
-                <div className="w-10 h-5 bg-primary rounded-full flex items-center px-1"><div className="w-3 h-3 bg-black rounded-full ml-auto" /></div>
-             </div>
-             <div className="flex justify-between items-center opacity-50">
-                <div><div className="text-sm font-bold text-white">Neural Cache</div><div className="text-xs text-txt3">Persistent skill indexing</div></div>
-                <div className="w-10 h-5 bg-white/10 rounded-full flex items-center px-1"><div className="w-3 h-3 bg-white/20 rounded-full" /></div>
-             </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-bg1 border border-white/5 rounded-2xl p-6 space-y-6">
+               <div className="flex justify-between items-center">
+                  <div><div className="text-sm font-bold text-white">Tunnel Convenience</div><div className="text-xs text-txt3">Auto-route localport mapping</div></div>
+                  <div className="w-10 h-5 bg-primary rounded-full flex items-center px-1"><div className="w-3 h-3 bg-black rounded-full ml-auto" /></div>
+               </div>
+            </div>
+            <div className="bg-bg1 border border-primary/20 rounded-2xl p-6 flex flex-col justify-between group hover:border-primary/50 transition-all cursor-pointer" onClick={() => window.open('https://coderabbit.ai/dashboard')}>
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Sparkles size={16} className="text-primary" />
+                    <span className="text-sm font-bold text-white">CodeRabbit AI Audit</span>
+                  </div>
+                  <ChevronRight size={16} className="text-txt3 group-hover:text-primary transform translate-x-1" />
+               </div>
+               <div className="text-[10px] text-txt3 mt-2 uppercase tracking-tighter">AI-Enabled PR Integrity :: TI2 Master Sync</div>
+            </div>
           </div>
        </div>
     </div>

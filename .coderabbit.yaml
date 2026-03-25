@@ -1,0 +1,25 @@
+# CodeRabbit Configuration for T2I Rig
+# High-intensity AI Review Patterns
+
+language: "en-US"
+reviews:
+  profile: "assertive"
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!node_modules/**"
+    - "!dist/**"
+    - "src/App.tsx"
+    - "sdk/**"
+    - "scripts/**"
+
+instructions:
+  - "Always verify that changes maintain the 'See-Thru' industrial aesthetic."
+  - "Ensure the single-file App.tsx architecture is not fragmented without good reason."
+  - "Check for mobile-first responsiveness (Termux X11) in all UI updates."
+  - "Validate that CLI tools (ti/t2i) remain synchronized with the core Port 8888."
+
+chat:
+  enabled: true
