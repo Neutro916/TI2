@@ -1,0 +1,17 @@
+{
+  "name": "Terminal to Intel",
+  "short_name": "T2I",
+  "description": "Mobile-first AI Orchestration Rig",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#FFB000",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

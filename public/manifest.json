@@ -1,21 +1,23 @@
 {
-  "name": "Terminal to Intel",
-  "short_name": "Terminal to Intel",
-  "description": "Mobile-first AI Orchestration Rig",
+  "name": "ANTICLAW-2",
+  "short_name": "ANTICLAW",
+  "description": "Sovereign AI Orchestration OS",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
-  "theme_color": "#0070f3",
+  "theme_color": "#ffb000",
   "icons": [
     {
-      "src": "https://picsum.photos/seed/t2i/192/192",
+      "src": "/favicon.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "https://picsum.photos/seed/t2i/512/512",
+      "src": "/favicon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

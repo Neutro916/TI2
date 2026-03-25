@@ -1,30 +1,37 @@
-import tailwindcss from '@tailwindcss/vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
 
-export default defineConfig(({mode}) => {
+export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [
-      react(), 
+      react(),
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
         manifest: {
-          name: 'Terminal to Intel',
-          short_name: 'Terminal to Intel',
-          description: 'Mobile-first AI Orchestration Rig',
-          theme_color: '#000000',
+          name: 'ANTICLAW-2',
+          short_name: 'ANTICLAW',
+          description: 'Sovereign AI Orchestration OS',
+          theme_color: '#ffb000',
           background_color: '#000000',
           display: 'standalone',
           icons: [
-             {
-               src: 'icon.svg',
-               sizes: '192x192',
-               type: 'image/svg+xml'
-             }
+            {
+              src: 'favicon.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any'
+            },
+            {
+              src: 'favicon.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable'
+            }
           ]
         }
       })
@@ -39,8 +46,6 @@ export default defineConfig(({mode}) => {
     },
     server: {
       host: true,
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
   };

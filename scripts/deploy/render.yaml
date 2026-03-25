@@ -2,8 +2,8 @@ services:
   - type: web
     name: t2i-terminal
     env: docker
-    plan: free
-    region: oregon
+    plan: starter
+    region: oregon 
     envVars:
       - key: GEMINI_API_KEY
         sync: false

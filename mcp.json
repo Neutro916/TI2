@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "t2i-rig-tools": {
+      "command": "node",
+      "args": [
+        "E:/T2I-bot-skill/sdk/bin/t2i-mcp-bridge.js"
+      ],
+      "env": {
+        "T2I_ROOT": "E:/T2I-bot-skill",
+        "AUTH_TOKEN": "T2I_MASTER_SYNC_916"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "E:/T2I-bot-skill", "E:/Junk"]
+    }
+  }
+}

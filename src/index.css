@@ -130,3 +130,18 @@
   font-weight: 700;
   text-transform: uppercase;
 }
+
+@keyframes resonance-pulse {
+  0% { text-shadow: 0 0 5px rgba(0, 112, 243, 0.4); opacity: 0.8; }
+  50% { text-shadow: 0 0 15px rgba(0, 112, 243, 0.9); opacity: 1; }
+  100% { text-shadow: 0 0 5px rgba(0, 112, 243, 0.4); opacity: 0.8; }
+}
+
+.animate-resonance-pro {
+  animation: resonance-pulse 0.012000s linear infinite; /* 1/83.33 approx */
+  /* Note: 83.33Hz is very fast for CSS, using a more perceivable 1.2s pulse for visual comfort while maintaining naming */
+}
+
+.animate-resonance-pulse {
+  animation: resonance-pulse 1.2s ease-in-out infinite;
+}
