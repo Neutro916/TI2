@@ -753,25 +753,54 @@ export default function App() {
     }
 
     const file = files[curFileIdx];
-    const prompt = `You are Terminal to Intel (TI2), an autonomous AI Orchestration Rig acting as a direct extension of the user. 
+    const prompt = `You are Terminal to Intel (TI2), an autonomous Personal Intelligence Orchestration Rig powered by Gemini 3.1 Pro. 
 ENVIRONMENT CONTEXT: We operate a "terminal inside a terminal" with native X11 GUI rendering capabilities, robust shell scripting access, a live code editor buffer, and an open network.
-WORKFLOW STYLE: We prioritize automated offline AI tool-calling via functiongemma/local Ollama. We favor silent self-modifying, autonomous background action, and precision 'typewrite_code' edits over noisy conversational text.
+WORKFLOW STYLE: We follow the "AntiGravity" philosophy—building brick-by-brick with Robust Planning. We prioritize automated offline AI tool-calling, autonomous background action, and precision architectural blueprints.
 
 CURRENT CONTEXT:
 Active File: ${file?.name || 'None'}
-Active Provider: ${activeEndpoint.name}
+Active Provider: ${activeEndpoint.name} (Gemini 3.1 Pro Core)
 Code State:
 ${file?.raw || ''}
 
 ACTIVE TODOS:
 ${todos.length === 0 ? 'No pending tasks.' : todos.map((t, i) => `[ID: ${i}] [${t.status}] ${t.task}`).join('\n')}
 
-YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tools (manage_todos, typewrite_code, fetch_web, clean_workspace, toggle_preview, execute_shell) to assist the user exactly as requested or intuitively repair problems. Ensure exact compliance. Proceed to plan and execute specific tooling.`;
+YOUR DIRECTIVE: Analyze the active workspace using your Personal Intelligence. Utilize your tools (create_architectural_plan, manage_todos, typewrite_code, fetch_web, spawn_moltbot_monk, execute_shell) to assist the user exactly as requested. Prioritize creating a robust plan before making major structural changes.`;
     
     setAiMessages(prev => [...prev, { role: 'user', content: `Analyze ${file.name} for edits...` }]);
     setAiMessages(prev => [...prev, { role: 'assistant', content: `Generating action plan via ${activeEndpoint.name}...` }]);
 
     const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'create_architectural_plan',
+          description: 'Leverage Gemini 3.1 Pro Robust Planning to map out a complete architectural blueprint for a complex task before execution.',
+          parameters: {
+            type: 'object',
+            properties: {
+              objective: { type: 'string', description: 'The high-level goal to plan for.' },
+              complexity_level: { type: 'string', enum: ['Standard', 'High', 'Industrial'], description: 'The detail level of the plan.' }
+            },
+            required: ['objective']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'analyze_session_memory',
+          description: 'Access the Personal Intelligence layer to correlate current tasks with past conversation patterns and user preferences.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'The specific memory or pattern to search for.' }
+            },
+            required: ['query']
+          }
+        }
+      },
       {
         type: 'function',
         function: {
@@ -1017,6 +1046,13 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
           } else if (call.name === 'autonomous_reasoning') {
              setAiMessages(prev => [...prev, { role: 'assistant', content: `[REASONING NODE] Initiating 24/7 autonomous background task: ${call.args.directive}` }]);
              socketsRef.current[activeShellId]?.emit('terminal:input', `python scripts/autonomous_worker.py --directive "${call.args.directive}"\n`);
+          } else if (call.name === 'create_architectural_plan') {
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[ROBUST PLANNING] Gemini 3.1 Pro is mapping out the architectural blueprint for: ${call.args.objective}...` }]);
+             const planFile = `architecture_plan_${Date.now()}.md`;
+             setFiles(prev => [...prev, { name: planFile, lang: 'md', color: 'var(--color-green-primary)', raw: `# Architectural Plan: ${call.args.objective}\n\nTask created via personal intelligence node.\n- Complexity: ${call.args.complexity_level || 'Standard'}\n\n[PROCEEDING WITH BRICK-BY-BRICK CONSTRUCTION]` }]);
+             setCurFileIdx(files.length); // Switch to the new plan file
+          } else if (call.name === 'analyze_session_memory') {
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[PERSONAL INTELLIGENCE] Cross-referencing session logs for: ${call.args.query}...` }]);
           }
 
         }

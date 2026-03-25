@@ -2,11 +2,9 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Terminal to Intel (T2I) Orchestration Rig
+# Terminal to Intel (T2I) - Personal Intelligence Rig V3.1
 
-The **T2I-bot-skill** is an advanced AI Orchestration Rig designed to seamlessly integrate high-level large language models (like Gemini) with local system execution, multi-agent swarm delegation, and custom Docker container spawning. 
-
-This repository acts as the conductor engine, interfacing perfectly with external multi-drive setups (like the Sovereign Lab `Junk` repository).
+The **T2I-bot-skill** is an industrial-tier AI Orchestration Rig powered by **Gemini 3.1 Pro**. This version focuses on the **"Old & Pro"** aesthetic—industrial reliability, minimalist command discipline, and robust architectural planning for the Sovereign Lab 33-agent swarm.
 
 ## 🚀 Core Features
 
