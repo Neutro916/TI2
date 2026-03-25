@@ -172,6 +172,10 @@ export default function App() {
   const [newScript, setNewScript] = useState({ name: '', cmd: '', icon: '⚡' });
   const [notifications, setNotifications] = useState<{id: string, message: string}[]>([]);
 
+  // Vercel AI Chatbot / Continue.dev Layout State
+  const [showAiSidebar, setShowAiSidebar] = useState(false);
+  const [aiMessages, setAiMessages] = useState<{role: 'user'|'assistant', content: string, toolCalls?: any[]}[]>([]);
+
   // Grep / Glob Search Modal
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -700,20 +704,19 @@ export default function App() {
 
   const simulateAiEdit = async () => {
     if (curFileIdx === -1 || !files[curFileIdx]) return;
-    setAiWorkingOn(curFileIdx);
-    setAiProgress(10);
-    setAiLog(['Initializing Autonomous Engine...', 'Loading Tool Definitions...']);
-
-    // Find first active provider (Gemini or Ollama)
+    
+    setShowAiSidebar(true);
     const activeEndpoint = endpoints.find(e => e.apiKey || e.type === 'Ollama');
     if (!activeEndpoint) {
-      setAiLog(l => [...l, 'ERR: No active AI endpoint found. Configure in Settings.']);
-      setTimeout(() => setAiWorkingOn(null), 3000);
+      setAiMessages(prev => [...prev, {role: 'assistant', content: 'ERR: No active AI endpoint found. Configure in Settings.'}]);
       return;
     }
 
     const file = files[curFileIdx];
-    const prompt = `You are Terminal to Intel. Ensure exact compliance. Using tools, analyze this file and execute background tasks if needed.\n\nFile: ${file.name}\nCode:\n${file.raw}\n\nDo you need to self_modify, fetch_web, or execute_shell?`;
+    const prompt = `You are Terminal to Intel. Ensure exact compliance. Using tools, analyze this file and execute background tasks if needed.\n\nFile: ${file.name}\nCode:\n${file.raw}\n\nDo you need to self_modify, fetch_web, clean_workspace, toggle_preview or execute_shell?`;
+    
+    setAiMessages(prev => [...prev, { role: 'user', content: `Analyze ${file.name} for edits...` }]);
+    setAiMessages(prev => [...prev, { role: 'assistant', content: `Generating action plan via ${activeEndpoint.name}...` }]);
 
     const tools = [
       {
@@ -783,49 +786,48 @@ export default function App() {
     ];
 
     try {
-      setAiProgress(40);
-      setAiLog(l => [...l, `Contacting ${activeEndpoint.name} via /api/chat...`]);
-      
       const res = await ProviderSync.getInstance().generateContent(activeEndpoint, prompt, 432, tools);
       
       if (res.functionCalls && res.functionCalls.length > 0) {
-        setAiProgress(80);
+        setAiMessages(prev => {
+          const stream = [...prev];
+          stream[stream.length - 1] = { role: 'assistant', content: 'Execution Blueprint:', toolCalls: res.functionCalls };
+          return stream;
+        });
+        
         for (const call of res.functionCalls) {
-          setAiLog(l => [...l, `Executing Tool: ${call.name}`]);
           if (call.name === 'self_modify') {
             const next = [...files];
             next[curFileIdx].raw = call.args.new_content || call.args.newContent;
             setFiles(next);
             setIsModified(true);
-            setAiLog(l => [...l, `[OK] File ${file.name} modified autonomously.`]);
+            setAiMessages(prev => [...prev, { role: 'assistant', content: `[OK] File ${file.name} modified autonomously.` }]);
           } else if (call.name === 'execute_shell') {
             socketsRef.current[activeShellId]?.emit('terminal:input', call.args.command + '\n');
-            setNotifications(prev => [...prev, { id: Math.random().toString(), message: `AI Executing: ${call.args.command}` }]);
+            setNotifications(prev => [...prev, { id: Math.random().toString(), message: `AI Executing Shell: ${call.args.command}` }]);
           } else if (call.name === 'fetch_web') {
-             setAiLog(l => [...l, `[FETCH] Pulling data from ${call.args.url}`]);
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[FETCH] Queued internal data pipeline for ${call.args.url}` }]);
           } else if (call.name === 'clean_workspace') {
              setFiles([]);
              setCurFileIdx(-1);
              setIsModified(false);
              setShowPreview(false);
-             setAiLog(l => [...l, `[OK] Workspace fully cleaned.`]);
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[OK] Workspace fully cleaned.` }]);
           } else if (call.name === 'toggle_preview') {
              setShowPreview(call.args.show);
-             setAiLog(l => [...l, `[OK] Live Preview ${call.args.show ? 'Enabled' : 'Disabled'}.`]);
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[OK] Live Preview ${call.args.show ? 'Enabled' : 'Disabled'}.` }]);
           }
         }
       } else {
-        setAiProgress(100);
-        setAiLog(l => [...l, 'No tools called. Analysis complete.']);
+        setAiMessages(prev => {
+          const stream = [...prev];
+          stream[stream.length - 1] = { role: 'assistant', content: res.text || 'Analysis complete. No structural changes requested.' };
+          return stream;
+        });
       }
     } catch (e) {
-      setAiLog(l => [...l, `ERR: Tool execution failed.`]);
+      setAiMessages(prev => [...prev, { role: 'assistant', content: 'ERR: Neural execution payload failed or endpoint crashed.' }]);
     }
-
-    setTimeout(() => {
-      setAiWorkingOn(null);
-      setAiLog([]);
-    }, 4000);
   };
 
   useEffect(() => {
@@ -1162,38 +1164,72 @@ export default function App() {
                     spellCheck={true}
                   />
                   
-                  {/* AI Working Preview Overlay */}
+                  {/* AI Chatbot Sidebar (Vercel Style) */}
                   <AnimatePresence>
-                    {aiWorkingOn === curFileIdx && (
+                    {showAiSidebar && (
                       <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-blue-primary/5 pointer-events-none flex flex-col items-center justify-center backdrop-blur-[1px] z-20"
+                        initial={{ width: 0 }}
+                        animate={{ width: 340 }}
+                        exit={{ width: 0 }}
+                        className="border-l border-bd bg-bg/95 backdrop-blur-md overflow-hidden flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-full absolute right-0 top-0"
                       >
-                        <div className="bg-bg1 border border-blue-primary/30 p-4 rounded-lg shadow-2xl max-w-[200px] w-full">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[16px] font-bold font-medium text-blue-primary font-bold tracking-[2px]">AI WORKING</span>
-                            <span className="text-[16px] font-bold font-medium text-blue-primary font-mono">{aiProgress}%</span>
+                        <div className="h-10 bg-bg1 border-b border-bd flex items-center px-4 justify-between shrink-0">
+                          <div className="flex items-center gap-2">
+                            <Sparkles size={14} className="text-blue-primary" />
+                            <span className="text-[13px] font-bold text-txt font-medium uppercase tracking-widest">FunctionGemma</span>
                           </div>
-                          <div className="h-1 bg-bg border border-bd rounded-full overflow-hidden mb-3">
-                            <motion.div 
-                              className="h-full bg-blue-primary"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${aiProgress}%` }}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            {aiLog.slice(-3).map((log, i) => (
-                              <div key={i} className="text-[15px] font-medium font-medium text-txt3 font-medium font-mono truncate opacity-60">
-                                › {log}
-                              </div>
-                            ))}
-                          </div>
+                          <X size={14} className="text-txt3 font-medium cursor-pointer hover:text-red-primary transition-colors" onClick={() => setShowAiSidebar(false)} />
                         </div>
                         
-                        {/* Ghost Edits Effect */}
-                        <div className="absolute top-1/4 left-1/4 right-1/4 bottom-1/4 border-2 border-dashed border-blue-primary/20 rounded animate-pulse" />
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+                          {aiMessages.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                              <Cpu size={32} className="mb-3 text-blue-primary" />
+                              <div className="text-[14px] font-bold uppercase tracking-widest text-blue-primary">AI Standby</div>
+                              <div className="text-[12px] font-medium text-txt3 font-medium mt-1">Ready for autonomous background tasks.</div>
+                            </div>
+                          ) : (
+                            aiMessages.map((msg, i) => (
+                              <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                <div className={`max-w-[85%] rounded-lg p-3 text-[13px] font-medium leading-relaxed font-mono ${msg.role === 'user' ? 'bg-blue-primary/20 text-blue-primary border border-blue-primary/30 rounded-tr-none' : 'bg-bg1 border border-bd rounded-tl-none text-txt2'}`}>
+                                  {msg.content}
+                                </div>
+                                {msg.toolCalls && msg.toolCalls.map((tc, j) => (
+                                  <div key={j} className="mt-2 text-[11px] font-bold tracking-widest bg-black/40 border border-bd p-2 rounded w-full">
+                                    <div className="text-blue-primary mb-1 flex items-center gap-1"><Zap size={10} /> Tool Executed: {tc.name}</div>
+                                    <div className="text-txt3 font-medium truncate font-mono bg-bg p-1 rounded border border-bd/50">{JSON.stringify(tc.args).substring(0, 60)}...</div>
+                                    {tc.name === 'self_modify' && (
+                                      <button 
+                                        className="mt-2 w-full bg-blue-primary/10 hover:bg-blue-primary text-blue-primary hover:text-white border border-blue-primary/50 transition-colors py-1.5 rounded uppercase tracking-widest font-bold"
+                                        onClick={() => {
+                                          const next = [...files];
+                                          next[curFileIdx].raw = tc.args.new_content || tc.args.newContent;
+                                          setFiles(next);
+                                          setIsModified(true);
+                                          setNotifications(prev => [...prev, { id: Math.random().toString(), message: `Applied AI Edit to ${files[curFileIdx].name}` }]);
+                                        }}
+                                      >
+                                        APPLY EDIT
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        <div className="p-3 border-t border-bd bg-bg1 shrink-0">
+                           <div className="relative flex">
+                             <input type="text" placeholder="Prompt FunctionGemma..." className="flex-1 bg-black/40 border border-bd rounded-l-md pl-3 pr-2 py-2 text-[13px] font-medium focus:border-blue-primary outline-none text-txt font-mono" onKeyDown={(e) => {
+                               if (e.key === 'Enter' && e.currentTarget.value) {
+                                 const v = e.currentTarget.value;
+                                 e.currentTarget.value = '';
+                                 setAiMessages(prev => [...prev, { role: 'user', content: v }]);
+                               }
+                             }}/>
+                             <button className="px-3 bg-blue-primary text-black rounded-r-md hover:bg-white transition-colors flex items-center justify-center"><Send size={14} /></button>
+                           </div>
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
