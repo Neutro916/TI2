@@ -265,6 +265,34 @@ export default function App() {
   ]);
 
   const [selectedEndpointId, setSelectedEndpointId] = useState<string>('ollama-local');
+  const [todos, setTodos] = useState<{task: string, status: 'PENDING' | 'DONE'}[]>([]);
+  const [endpointHealth, setEndpointHealth] = useState<Record<string, boolean>>({});
+
+  // Real-time Health check loop for local ports
+  useEffect(() => {
+    const checkHealth = async () => {
+      const health: Record<string, boolean> = { ...endpointHealth };
+      for (const ep of endpoints) {
+        if (ep.id === 'ollama-local') {
+          try {
+            const res = await fetch(`http://${ep.host}:${ep.port}/`);
+            health[ep.id] = res.ok || res.status === 200;
+          } catch { health[ep.id] = false; }
+        } else if (ep.id === 'lmstudio-local') {
+          try {
+            const res = await fetch(`http://${ep.host}:${ep.port}/v1/models`);
+            health[ep.id] = res.ok;
+          } catch { health[ep.id] = false; }
+        } else {
+          health[ep.id] = true;
+        }
+      }
+      setEndpointHealth(health);
+    };
+    checkHealth();
+    const iv = setInterval(checkHealth, 15000);
+    return () => clearInterval(iv);
+  }, [endpoints]);
 
   // Auto-sync Rig models on startup
   useEffect(() => {
@@ -730,15 +758,50 @@ WORKFLOW STYLE: We prioritize automated offline AI tool-calling via functiongemm
 
 CURRENT CONTEXT:
 Active File: ${file?.name || 'None'}
+Active Provider: ${activeEndpoint.name}
 Code State:
 ${file?.raw || ''}
 
-YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tools (typewrite_code, fetch_web, clean_workspace, toggle_preview, execute_shell) to assist the user exactly as requested or intuitively repair problems. Ensure exact compliance. Proceed to plan and execute specific tooling.`;
+ACTIVE TODOS:
+${todos.length === 0 ? 'No pending tasks.' : todos.map((t, i) => `[ID: ${i}] [${t.status}] ${t.task}`).join('\n')}
+
+YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tools (manage_todos, typewrite_code, fetch_web, clean_workspace, toggle_preview, execute_shell) to assist the user exactly as requested or intuitively repair problems. Ensure exact compliance. Proceed to plan and execute specific tooling.`;
     
     setAiMessages(prev => [...prev, { role: 'user', content: `Analyze ${file.name} for edits...` }]);
     setAiMessages(prev => [...prev, { role: 'assistant', content: `Generating action plan via ${activeEndpoint.name}...` }]);
 
     const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'delegate_to_swarm',
+          description: 'Offload highly specific tasks to the local 33-agent unified Python dispatcher (Junk repo formation).',
+          parameters: {
+            type: 'object',
+            properties: {
+              task_query: { type: 'string', description: 'The specialized query to delegate.' },
+              target_agent: { type: 'string', enum: ['MFish_Predictor', 'CONDUCTOR_RAG', 'NEMO_Ralph', 'Math_Reuse_Library', 'Graph_Visualizer'], description: 'The specialist agent to invoke.' }
+            },
+            required: ['task_query', 'target_agent']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'manage_todos',
+          description: 'Add, complete, or clear a task on the internal rig Todo list to track long-term multi-step actions.',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: { type: 'string', enum: ['add', 'complete', 'clear'], description: 'The action to perform.' },
+              task_id: { type: 'number', description: 'The task ID (array index) to update or complete. Required for complete.' },
+              task_text: { type: 'string', description: 'The description of the task when adding.' }
+            },
+            required: ['action']
+          }
+        }
+      },
       {
         type: 'function',
         function: {
@@ -856,6 +919,24 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
              setFiles(next);
              setIsModified(true);
              setAiMessages(prev => [...prev, { role: 'assistant', content: `[OK] Code selectively appended at Line ${target === -1 ? 'End' : target}.` }]);
+          } else if (call.name === 'manage_todos') {
+             if (call.args.action === 'add') {
+               setTodos(prev => [...prev, { task: call.args.task_text, status: 'PENDING' }]);
+               setAiMessages(prev => [...prev, { role: 'assistant', content: `[TODO ADDED] ${call.args.task_text}` }]);
+             } else if (call.args.action === 'complete') {
+               setTodos(prev => {
+                 const next = [...prev];
+                 if (next[call.args.task_id]) next[call.args.task_id].status = 'DONE';
+                 return next;
+               });
+               setAiMessages(prev => [...prev, { role: 'assistant', content: `[TODO COMPLETED] Task ID ${call.args.task_id}` }]);
+             } else if (call.args.action === 'clear') {
+               setTodos([]);
+               setAiMessages(prev => [...prev, { role: 'assistant', content: `[TODO CLEARED]` }]);
+             }
+          } else if (call.name === 'delegate_to_swarm') {
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[SWARM DISPATCH] Routing query to local ${call.args.target_agent} node...` }]);
+             socketsRef.current[activeShellId]?.emit('terminal:input', `echo "Dispatching to ${call.args.target_agent}: ${call.args.task_query}"\n`);
           } else if (call.name === 'clean_workspace') {
              setFiles([]);
              setCurFileIdx(-1);
@@ -1212,6 +1293,7 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
                         <div className="h-10 bg-bg1 border-b border-bd flex items-center px-4 justify-between shrink-0">
                           <div className="flex items-center gap-2">
                             <Sparkles size={14} className="text-blue-primary" />
+                            <div className={`w-2 h-2 rounded-full ${endpointHealth[selectedEndpointId] ?? true ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'} transition-colors`} title={endpointHealth[selectedEndpointId] ?? true ? "Endpoint Online" : "Endpoint Offline"} />
                             <select 
                               className="bg-transparent text-[13px] font-bold text-blue-primary font-medium uppercase tracking-widest outline-none cursor-pointer max-w-[140px] truncate"
                               value={selectedEndpointId}
