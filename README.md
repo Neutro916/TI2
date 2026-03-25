@@ -11,6 +11,7 @@ This repository acts as the conductor engine, interfacing perfectly with externa
 ## 🚀 Core Features
 
 - **Moltbot Spawning**: The Conductor AI can autonomously trigger the `spawn_moltbot_monk` skill to spin up isolated Docker containers for specialized tasks (e.g., C++ analysis, hardware thermals) using the `[8-Infinity 373-733-933]` frequency.
+- **Anticlaw 2 (Scraping & Autonomy)**: Native integration of `Crawl4AI` for high-speed, LLM-optimized web crawling and `Pydantic-AI` logic for 24/7 background reasoning nodes that monitor your environment continuously.
 - **Dynamic Network Posting**: Natively handles massive AI loads and binds to `0.0.0.0`, allowing you to host the AI terminal locally and access it from any phone or secondary laptop on your Wi-Fi (perfect for broken screen scenarios).
 - **Dual-Backup Automation**: A built-in deployment script (`build_and_backup.ps1`) that strips `node_modules`, cleanly packages the core files, and synchronizes backups simultaneously to a 7TB Drive and local laptop paths.
 - **Standalone Gemma Fine-Tuning**: A strictly local Unsloth training script (`train_gemma_local.py`) to tune the `gemma-2-9b-it-ti2-moltbot` model securely on an RTX workstation.
@@ -46,6 +47,17 @@ If you want to train your own Kimi K2.5 style offline model specifically for Mol
 python scripts/train_gemma_local.py
 ```
 *(Note: Ensure you have your `unsloth` virtual environment activated first).*
+
+### 5. Running 24/7 Autonomous Nodes (Anticlaw 2)
+To launch a background worker that monitors your workspace and handles multi-step task chains:
+```bash
+python scripts/autonomous_worker.py --directive "Monitor workspace and index new files"
+```
+Or use the `autonomous_reasoning` tool inside the T2I Chat Interface.
+
+### 6. High-Speed Web Crawling
+The AI can now use the `anticlaw_crawl` tool to extract clean Markdown from any site using the local `Crawl4AI` engine.
+
 
 ---
 

@@ -913,6 +913,35 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
             required: ['specialty', 'container_name', 'task']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'anticlaw_crawl',
+          description: 'Execute a high-speed, LLM-optimized web crawl using Crawl4AI to extract structured markdown/json from any URL.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'The target URL to crawl.' },
+              extraction_schema: { type: 'string', description: 'Optional JSON schema for structured data extraction.' }
+            },
+            required: ['url']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'autonomous_reasoning',
+          description: 'Invoke a 24/7 background reasoning node (Pydantic-AI based) to continuously monitor the workspace and solve long-running multi-step task chains.',
+          parameters: {
+            type: 'object',
+            properties: {
+              directive: { type: 'string', description: 'The high-level objective for the autonomous node.' }
+            },
+            required: ['directive']
+          }
+        }
       }
     ];
 
@@ -982,7 +1011,14 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
           } else if (call.name === 'spawn_moltbot_monk') {
              setAiMessages(prev => [...prev, { role: 'assistant', content: `[MOLTBOT SPAWN] Booting specialized Monk container: ${call.args.container_name} (${call.args.specialty})...` }]);
              socketsRef.current[activeShellId]?.emit('terminal:input', `echo "[8-Infinity 373-733-933] Spawning ${call.args.specialty} Monk..." && docker run -d --name ${call.args.container_name} ubuntu:latest bash -c "echo 'Monk Active: ${call.args.task}' && sleep 3600"\n`);
+          } else if (call.name === 'anticlaw_crawl') {
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[ANTICLAW CRAWL] Extracting structured metadata from ${call.args.url}...` }]);
+             socketsRef.current[activeShellId]?.emit('terminal:input', `python -c "import asyncio; from crawl4ai import AsyncWebCrawler; async def run(): async with AsyncWebCrawler() as crawler: result = await crawler.arun(url='${call.args.url}'); print(result.markdown); asyncio.run(run())"\n`);
+          } else if (call.name === 'autonomous_reasoning') {
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[REASONING NODE] Initiating 24/7 autonomous background task: ${call.args.directive}` }]);
+             socketsRef.current[activeShellId]?.emit('terminal:input', `python scripts/autonomous_worker.py --directive "${call.args.directive}"\n`);
           }
+
         }
       } else {
         setAiMessages(prev => {
