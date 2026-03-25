@@ -107,18 +107,34 @@ export class ProviderSync {
     }
 
     if (endpoint.type === 'Ollama') {
-      const res = await fetch(`http://${endpoint.host}:${endpoint.port}/api/generate`, {
+      const res = await fetch(`http://${endpoint.host}:${endpoint.port}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: endpoint.model,
-          system: systemInstruction,
-          prompt: prompt,
-          stream: false
+          messages: [
+            { role: 'system', content: systemInstruction },
+            { role: 'user', content: prompt }
+          ],
+          stream: false,
+          tools: tools && tools.length > 0 ? tools : undefined
         })
       });
       const data = await res.json();
-      return { text: data.response || 'No response from Ollama' };
+      
+      let functionCalls: any[] | undefined = undefined;
+      // Map Ollama's native tool_calls to the universal Rig format
+      if (data.message?.tool_calls && data.message.tool_calls.length > 0) {
+        functionCalls = data.message.tool_calls.map((tc: any) => ({
+          name: tc.function.name,
+          args: typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments
+        }));
+      }
+
+      return { 
+        text: data.message?.content || '',
+        functionCalls 
+      };
     }
 
     if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter' || endpoint.type === 'LMStudio') {

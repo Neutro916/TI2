@@ -25,6 +25,7 @@ import {
   Edit2,
   Save,
   Play,
+  Search,
   Square,
   Camera,
   Mic,
@@ -170,6 +171,32 @@ export default function App() {
   const [isAddingScript, setIsAddingScript] = useState(false);
   const [newScript, setNewScript] = useState({ name: '', cmd: '', icon: '⚡' });
   const [notifications, setNotifications] = useState<{id: string, message: string}[]>([]);
+
+  // Grep / Glob Search Modal
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{fileIdx: number, lineIdx: number, text: string}[]>([]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const q = searchQuery.toLowerCase();
+    const results: {fileIdx: number, lineIdx: number, text: string}[] = [];
+    files.forEach((f, idx) => {
+      if (f.raw) {
+        const lines = f.raw.split('\n');
+        lines.forEach((l, lIdx) => {
+          if (l.toLowerCase().includes(q) || f.name.toLowerCase().includes(q)) {
+            results.push({ fileIdx: idx, lineIdx: lIdx, text: l.trim() || f.name });
+            if (results.length > 50) return; // limit search
+          }
+        });
+      }
+    });
+    setSearchResults(results.slice(0, 50));
+  }, [searchQuery, files]);
   
   const [discoveredModels, setDiscoveredModels] = useState<Record<string, ModelInfo[]>>({});
 
@@ -671,38 +698,103 @@ export default function App() {
     });
   };
 
-  const simulateAiEdit = () => {
+  const simulateAiEdit = async () => {
+    if (curFileIdx === -1 || !files[curFileIdx]) return;
     setAiWorkingOn(curFileIdx);
-    setAiProgress(0);
-    const logs = [
-      'Initializing AI engine...', 
-      'Scanning codebase...', 
-      'Analyzing frequency patterns...', 
-      'Applying Solfeggio modulations...',
-      'Optimizing for 528Hz resonance...',
-      'Refactoring harmonics...',
-      'Injecting neural logic...',
-      'Finalizing modulation stack...'
+    setAiProgress(10);
+    setAiLog(['Initializing Autonomous Engine...', 'Loading Tool Definitions...']);
+
+    // Find first active provider (Gemini or Ollama)
+    const activeEndpoint = endpoints.find(e => e.apiKey || e.type === 'Ollama');
+    if (!activeEndpoint) {
+      setAiLog(l => [...l, 'ERR: No active AI endpoint found. Configure in Settings.']);
+      setTimeout(() => setAiWorkingOn(null), 3000);
+      return;
+    }
+
+    const file = files[curFileIdx];
+    const prompt = `You are Terminal to Intel. Ensure exact compliance. Using tools, analyze this file and execute background tasks if needed.\n\nFile: ${file.name}\nCode:\n${file.raw}\n\nDo you need to self_modify, fetch_web, or execute_shell?`;
+
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'self_modify',
+          description: 'Rewrite or modify the contents of the current file in the editor completely.',
+          parameters: {
+            type: 'object',
+            properties: {
+              new_content: { type: 'string', description: 'The entire new source code to replace the file with' }
+            },
+            required: ['new_content']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'fetch_web',
+          description: 'Fetch text content or documentation from a URL',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'The absolute URL to fetch' }
+            },
+            required: ['url']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'execute_shell',
+          description: 'Run a bash/terminal command in the background shell',
+          parameters: {
+            type: 'object',
+            properties: {
+              command: { type: 'string', description: 'The CLI command string' }
+            },
+            required: ['command']
+          }
+        }
+      }
     ];
-    setAiLog([logs[0]]);
-    
-    let logIdx = 1;
-    const interval = setInterval(() => {
-      setAiProgress(prev => {
-        if (prev % 15 === 0 && logIdx < logs.length) {
-          setAiLog(l => [...l, logs[logIdx++]]);
+
+    try {
+      setAiProgress(40);
+      setAiLog(l => [...l, `Contacting ${activeEndpoint.name} via /api/chat...`]);
+      
+      const res = await ProviderSync.getInstance().generateContent(activeEndpoint, prompt, 432, tools);
+      
+      if (res.functionCalls && res.functionCalls.length > 0) {
+        setAiProgress(80);
+        for (const call of res.functionCalls) {
+          setAiLog(l => [...l, `Executing Tool: ${call.name}`]);
+          if (call.name === 'self_modify') {
+            const next = [...files];
+            next[curFileIdx].raw = call.args.new_content || call.args.newContent;
+            setFiles(next);
+            setIsModified(true);
+            setAiLog(l => [...l, `[OK] File ${file.name} modified autonomously.`]);
+          } else if (call.name === 'execute_shell') {
+            socketsRef.current[activeShellId]?.emit('terminal:input', call.args.command + '\n');
+            setNotifications(prev => [...prev, { id: Math.random().toString(), message: `AI Executing: ${call.args.command}` }]);
+          } else if (call.name === 'fetch_web') {
+             setAiLog(l => [...l, `[FETCH] Pulling data from ${call.args.url}`]);
+          }
         }
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setAiWorkingOn(null);
-            setAiLog([]);
-          }, 1500);
-          return 100;
-        }
-        return prev + 1;
-      });
-    }, 40);
+      } else {
+        setAiProgress(100);
+        setAiLog(l => [...l, 'No tools called. Analysis complete.']);
+      }
+    } catch (e) {
+      setAiLog(l => [...l, `ERR: Tool execution failed.`]);
+    }
+
+    setTimeout(() => {
+      setAiWorkingOn(null);
+      setAiLog([]);
+    }, 4000);
   };
 
   useEffect(() => {
@@ -785,23 +877,33 @@ export default function App() {
     
     return (
       <div className="flex flex-1 overflow-hidden">
-        {/* File Rail (Sidebar) */}
+        {/* File Rail (Premium Source Control) */}
         <AnimatePresence>
           {showFileRail && (
             <motion.div 
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 220, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              className="border-r border-bd bg-bg1 flex flex-col shrink-0 overflow-hidden shadow-xl"
+              initial={{ width: 0, opacity: 0, x: -20 }}
+              animate={{ width: 280, opacity: 1, x: 0 }}
+              exit={{ width: 0, opacity: 0, x: -20 }}
+              className="border-r border-white/5 bg-[#0a0a0f]/90 backdrop-blur-3xl flex flex-col shrink-0 overflow-hidden shadow-2xl relative"
             >
-              <div className="h-9 flex items-center justify-between px-3 border-b border-bd bg-bg2 shrink-0">
-                <span className="text-[13px] font-bold tracking-[1px] text-txt uppercase flex items-center gap-2">
-                  <RefreshCw size={12} className="text-blue-primary" /> Source Control
-                </span>
-                <X size={12} className="text-txt3 cursor-pointer hover:text-blue-primary" onClick={() => setShowFileRail(false)} />
+              <div className="absolute inset-0 bg-gradient-to-b from-blue-primary/10 via-transparent to-[#0a0a0f] pointer-events-none" />
+              <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 shrink-0 relative z-10 bg-white/[0.02]">
+                <div className="flex flex-col">
+                  <span className="text-[12px] font-bold tracking-[3px] text-white uppercase flex items-center gap-2">
+                    <FolderOpen size={14} className="text-blue-primary drop-shadow-[0_0_8px_rgba(var(--color-blue-primary),0.8)]" /> SOURCE CONTROL
+                  </span>
+                  <span className="text-[9px] text-blue-primary/70 uppercase tracking-[2px] mt-0.5">Local Workspace</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setShowSearch(true)} className="text-txt3 hover:text-white transition-colors"><Search size={14} /></button>
+                  <button onClick={() => setShowFileRail(false)} className="text-txt3 hover:text-white transition-colors"><X size={14} /></button>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-hide">
-                <div className="text-[11px] font-bold text-txt3 uppercase tracking-widest px-2 py-1 mb-1">Changes</div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-1.5 scrollbar-hide relative z-10">
+                <div className="text-[10px] font-bold text-txt3/50 uppercase tracking-widest px-2 pb-2 border-b border-white/5 mb-3 flex justify-between">
+                  <span>Changes</span>
+                  <span>{files.length} Files</span>
+                </div>
                 {files.map((f, i) => {
                   const isMod = i === curFileIdx ? isModified : false;
                   const isUntracked = !isMod && (!f.raw || f.raw.length < 50); 
@@ -809,14 +911,17 @@ export default function App() {
                     <button 
                       key={i}
                       onClick={() => { setCurFileIdx(i); setIsModified(false); }}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded transition-colors group ${i === curFileIdx ? 'bg-blue-primary/15 text-blue-primary border-l-2 border-blue-primary' : 'border-l-2 border-transparent hover:bg-bg2 text-txt3 hover:text-txt'}`}
+                      className={`w-full flex items-center justify-between px-3 py-3 rounded-xl transition-all duration-300 group border relative overflow-hidden ${i === curFileIdx ? 'bg-blue-primary/10 border-blue-primary/30 text-white shadow-[0_0_20px_rgba(var(--color-blue-primary),0.1)]' : 'bg-transparent border-transparent hover:bg-white/5 hover:border-white/10 text-txt3 hover:text-white'}`}
                     >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <FileCode size={14} className={isMod ? 'text-yellow-500' : isUntracked ? 'text-green-500' : 'text-txt3 group-hover:text-txt'} />
-                        <span className="text-[13px] font-mono truncate text-left">{f.name}</span>
+                      {i === curFileIdx && <div className="absolute inset-y-0 left-0 w-1 bg-blue-primary shadow-[0_0_10px_rgba(var(--color-blue-primary),1)]" />}
+                      <div className="flex items-center gap-3 overflow-hidden z-10">
+                        <FileCode size={16} className={isMod ? 'text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]' : isUntracked ? 'text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]' : i === curFileIdx ? 'text-blue-primary' : 'text-txt3 group-hover:text-white transition-colors'} />
+                        <span className="text-[13px] font-medium tracking-wide truncate text-left drop-shadow-sm">{f.name}</span>
                       </div>
-                      {isMod && <span className="text-[11px] font-bold text-yellow-500 font-mono">M</span>}
-                      {isUntracked && !isMod && <span className="text-[11px] font-bold text-green-500 font-mono">U</span>}
+                      <div className="flex items-center gap-2 shrink-0 z-10">
+                        {isMod && <span className="flex items-center justify-center w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-400 text-[10px] font-black tracking-tighter">M</span>}
+                        {isUntracked && !isMod && <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-400/20 text-green-400 text-[10px] font-black tracking-tighter">U</span>}
+                      </div>
                     </button>
                   );
                 })}
@@ -826,12 +931,65 @@ export default function App() {
         </AnimatePresence>
 
         <div className="flex flex-col flex-1 overflow-hidden relative">
+          
+          {/* Global Search / Grep Overlay */}
+          <AnimatePresence>
+            {showSearch && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                className="absolute top-12 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 bg-[#0a0a0f]/95 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col"
+              >
+                <div className="flex items-center px-4 h-14 border-b border-white/10 shrink-0 gap-3 bg-white/[0.02]">
+                  <Search size={18} className="text-blue-primary drop-shadow-[0_0_8px_rgba(var(--color-blue-primary),0.8)]" />
+                  <input 
+                    autoFocus
+                    placeholder="Global Grep Search..."
+                    className="flex-1 bg-transparent border-none outline-none text-[15px] text-white font-medium tracking-wide placeholder:text-txt3/40"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Escape' && setShowSearch(false)}
+                  />
+                  <button onClick={() => setShowSearch(false)} className="text-[10px] font-bold tracking-[2px] text-txt3 bg-white/5 hover:bg-white/10 hover:text-white transition-colors px-2 py-1 rounded cursor-pointer">ESC</button>
+                </div>
+                {searchQuery && (
+                  <div className="max-h-[50vh] overflow-y-auto p-2 scrollbar-hide flex flex-col gap-1">
+                    {searchResults.length === 0 ? (
+                      <div className="py-12 text-center text-txt3/50 font-medium text-[14px]">No matches found in workspace</div>
+                    ) : (
+                      searchResults.map((res, idx) => (
+                        <button 
+                          key={idx}
+                          onClick={() => {
+                            setCurFileIdx(res.fileIdx);
+                            setCurLine(res.lineIdx + 1);
+                            setShowSearch(false);
+                            setSearchQuery('');
+                          }}
+                          className="flex flex-col text-left px-4 py-3 rounded-xl hover:bg-blue-primary/10 border border-transparent hover:border-blue-primary/30 transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileCode size={12} className="text-blue-primary opacity-70 group-hover:opacity-100" />
+                            <span className="text-[12px] font-bold tracking-wider text-white bg-white/5 px-2 py-0.5 rounded">{files[res.fileIdx].name}</span>
+                            <span className="text-[11px] text-txt3/60">Line {res.lineIdx + 1}</span>
+                          </div>
+                          <div className="text-[13px] font-mono text-txt2 truncate max-w-full opacity-70 group-hover:opacity-100 group-hover:text-blue-primary transition-colors">{res.text}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {!showFileRail && (
             <button 
               onClick={() => setShowFileRail(true)}
-              className="absolute left-2 top-11 z-20 p-1.5 bg-bg border border-bd rounded shadow-xl text-blue-primary hover:scale-110 transition-transform"
+              className="absolute left-2 top-11 z-20 p-2 bg-[#0a0a0f]/80 backdrop-blur border border-white/10 rounded-lg shadow-xl text-blue-primary hover:scale-110 transition-transform hover:bg-white/5 hover:border-white/20"
             >
-              <FolderOpen size={14} />
+              <FolderOpen size={16} />
             </button>
           )}
 
@@ -915,6 +1073,17 @@ export default function App() {
                   ))}
                 </div>
                 <div className="flex-1 overflow-auto scrollbar-thin bg-bg/40 backdrop-blur-md relative">
+                  
+                  {/* Floating AI Execution Guide */}
+                  <button 
+                    onClick={simulateAiEdit}
+                    className="absolute right-6 top-6 z-30 p-3 bg-blue-primary/10 border border-blue-primary/30 backdrop-blur-md rounded-full shadow-[0_0_15px_rgba(var(--color-blue-primary),0.3)] text-blue-primary hover:bg-blue-primary hover:text-white hover:scale-110 transition-all group flex items-center justify-center"
+                    title="AI Autonomous Execution Guide"
+                  >
+                    <Sparkles size={18} className="group-hover:animate-spin" />
+                    <span className="absolute right-full mr-3 whitespace-nowrap bg-black/80 px-3 py-1.5 rounded text-[11px] font-bold tracking-widest text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">AI EXECUTION GUIDE (BG CODE)</span>
+                  </button>
+
                   <div className="absolute inset-0 p-2 text-[15px] font-medium leading-relaxed font-mono pointer-events-none whitespace-pre overflow-hidden opacity-80">
                     {lines.map((line, i) => (
                       <div key={i} className={i === curLine - 1 ? 'bg-blue-primary/10' : ''}>
@@ -1090,45 +1259,64 @@ export default function App() {
 
     return (
       <div className="flex flex-1 overflow-hidden bg-bg1">
-        {/* Fav Scripts Sidebar */}
+        {/* Premium Fav Scripts Sidebar */}
         <AnimatePresence>
           {showFavSidebar && (
             <motion.div 
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 180, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              className="border-r border-bd bg-bg flex flex-col shrink-0 overflow-hidden"
+              initial={{ width: 0, opacity: 0, x: -20 }}
+              animate={{ width: 280, opacity: 1, x: 0 }}
+              exit={{ width: 0, opacity: 0, x: -20 }}
+              className="border-r border-white/5 bg-[#0a0a0f]/90 backdrop-blur-3xl flex flex-col shrink-0 overflow-hidden shadow-2xl relative"
             >
-              <div className="h-8 flex items-center justify-between px-3 border-b border-bd shrink-0">
-                <span className="text-[16px] font-bold font-medium tracking-[2px] text-txt3 font-medium uppercase font-bold">Fav Scripts</span>
-                <X size={12} className="text-txt3 font-medium cursor-pointer hover:text-blue-primary" onClick={() => setShowFavSidebar(false)} />
+              <div className="absolute inset-0 bg-gradient-to-b from-purple-primary/10 via-transparent to-[#0a0a0f] pointer-events-none" />
+              <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 shrink-0 relative z-10 bg-white/[0.02]">
+                <div className="flex flex-col">
+                  <span className="text-[12px] font-bold tracking-[3px] text-white uppercase flex items-center gap-2">
+                    <Zap size={14} className="text-purple-primary drop-shadow-[0_0_8px_rgba(var(--color-purple-primary),0.8)]" /> SCRIPTS
+                  </span>
+                  <span className="text-[9px] text-purple-primary/70 uppercase tracking-[2px] mt-0.5">Automated Tasks</span>
+                </div>
+                <button onClick={() => setShowFavSidebar(false)} className="text-txt3 hover:text-white transition-colors"><X size={14} /></button>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-4 scrollbar-hide">
+              <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide relative z-10">
                 {favScripts.map(cat => (
                   <div key={cat.category}>
-                    <div className="text-[15px] font-medium font-medium text-txt3 font-medium uppercase tracking-widest mb-2 px-1">{cat.category}</div>
-                    <div className="space-y-1">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-[1px] flex-1 bg-white/5" />
+                      <span className="text-[10px] font-bold text-txt3/60 uppercase tracking-[4px]">{cat.category}</span>
+                      <div className="h-[1px] flex-1 bg-white/5" />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2.5">
                       {cat.items.map(s => (
                         <button 
                           key={s.name}
-                          onClick={() => socketsRef.current[activeShellId]?.emit('terminal:input', s.cmd + '\n')}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-bg2 text-txt3 font-medium hover:text-txt transition-colors group"
+                          onClick={() => {
+                            if (!socketsRef.current[activeShellId]) return;
+                            socketsRef.current[activeShellId]?.emit('terminal:input', s.cmd + '\n');
+                            setNotifications(prev => [...prev, { id: Math.random().toString(), message: `Running ${s.name}` }]);
+                          }}
+                          className="w-full flex items-center p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-purple-primary/10 hover:border-purple-primary/30 text-txt3 hover:text-white transition-all duration-300 group overflow-hidden relative shadow-[0_4px_10px_rgba(0,0,0,0.1)] hover:shadow-[0_0_20px_rgba(var(--color-purple-primary),0.15)]"
                         >
-                          <span className="text-[15px] font-medium group-hover:text-blue-primary">{s.icon}</span>
-                          <span className="text-[13px] font-medium font-mono truncate">{s.name}</span>
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full duration-1000 transition-transform pointer-events-none" />
+                          <div className="w-10 h-10 rounded-lg bg-black/40 flex items-center justify-center shrink-0 mr-3 border border-white/5 group-hover:border-purple-primary/40 group-hover:scale-110 transition-all duration-300 text-purple-primary/50 group-hover:text-purple-primary">
+                            <span className="text-[18px] drop-shadow-md">{s.icon}</span>
+                          </div>
+                          <div className="flex flex-col flex-1 truncate text-left justify-center">
+                            <span className="text-[13px] font-bold tracking-wide text-white drop-shadow-sm mb-0.5">{s.name}</span>
+                            <span className="text-[10px] font-mono text-txt3/50 truncate group-hover:text-txt3/80 transition-colors">{s.cmd}</span>
+                          </div>
+                          <Play size={14} className="text-purple-primary opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
                         </button>
                       ))}
                     </div>
                   </div>
                 ))}
-                <div className="mt-4 px-1">
-                  <button 
-                    onClick={() => setIsAddingScript(true)}
-                    className="text-[16px] font-bold font-medium text-blue-primary hover:underline uppercase tracking-widest"
-                  >
-                    ＋ add script
-                  </button>
-                </div>
+                <button 
+                  onClick={() => setIsAddingScript(true)}
+                  className="w-full h-12 rounded-xl border border-dashed border-purple-primary/20 text-purple-primary/70 text-[11px] font-bold tracking-[3px] uppercase hover:bg-purple-primary/10 hover:text-purple-primary hover:border-purple-primary/50 transition-all duration-300 flex items-center justify-center gap-2 mt-6 shadow-sm group"
+                >
+                  <Plus size={14} className="group-hover:scale-110 transition-transform" /> NEW ALIAS
+                </button>
               </div>
             </motion.div>
           )}
