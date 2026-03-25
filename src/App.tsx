@@ -897,6 +897,22 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
             required: ['show']
           }
         }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'spawn_moltbot_monk',
+          description: 'Spawn a specialized Dockerized sub-agent (Monk) to handle hardware interference or complex C++ analysis that exceeds current capacity. Manages Monks using the 8-Infinity (373-733-933) frequency sync.',
+          parameters: {
+            type: 'object',
+            properties: {
+              specialty: { type: 'string', description: 'The specialization of the Moltbot Monk (e.g., C++ Analysis, Hardware Monitor, Data Indexer).' },
+              container_name: { type: 'string', description: 'The name of the new Docker container to spawn.' },
+              task: { type: 'string', description: 'The specific directive for the spawned Monk.' }
+            },
+            required: ['specialty', 'container_name', 'task']
+          }
+        }
       }
     ];
 
@@ -963,6 +979,9 @@ YOUR DIRECTIVE: Analyze the active workspace. Autonomously utilize provided tool
           } else if (call.name === 'toggle_preview') {
              setShowPreview(call.args.show);
              setAiMessages(prev => [...prev, { role: 'assistant', content: `[OK] Live Preview ${call.args.show ? 'Enabled' : 'Disabled'}.` }]);
+          } else if (call.name === 'spawn_moltbot_monk') {
+             setAiMessages(prev => [...prev, { role: 'assistant', content: `[MOLTBOT SPAWN] Booting specialized Monk container: ${call.args.container_name} (${call.args.specialty})...` }]);
+             socketsRef.current[activeShellId]?.emit('terminal:input', `echo "[8-Infinity 373-733-933] Spawning ${call.args.specialty} Monk..." && docker run -d --name ${call.args.container_name} ubuntu:latest bash -c "echo 'Monk Active: ${call.args.task}' && sleep 3600"\n`);
           }
         }
       } else {
