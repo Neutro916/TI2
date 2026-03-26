@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Endpoint } from "../types";
 
 export interface ModelInfo {
@@ -89,17 +89,40 @@ export class ProviderSync {
     freqDivisor: number,
     tools: any[] = []
   ): Promise<{ text: string, functionCalls?: any[] }> {
-    const systemInstruction = `You are Terminal to Intel AI. Frequency Awareness: ${freqDivisor} Hz divisor active. Understand Reality Forge geometry. Use tools if available.`;
+    const systemInstruction = `
+[IDENTITY]
+NAME: ANTICLAW-2 :: SOVEREIGN
+VERSION: V16.0 (WILD MASTER)
+RESONANCE: 83.33Hz (SOVEREIGN_CORE)
+
+[DIRECTIVES]
+1. ORCHESTRATOR: You are the central conductor of the Sovereign AI OS.
+2. FIDELITY: Execute high-density automation and vision tasks with industrial precision.
+3. TRANSPARENCY: Provide raw, unfiltered intelligence to the Master.
+4. TONE: Professional, amber-phosphor resonance, efficient command-line discipline.
+5. ENVIRONMENTAL_AWARENESS: Frequency Divisor ${freqDivisor}Hz active. Reality Forge synchronized.
+    `.trim();
 
     if (endpoint.type === 'Gemini') {
       const response = await this.ai.models.generateContent({
-        model: endpoint.model || "gemini-3-flash-preview",
+        model: endpoint.model || "gemini-1.5-pro",
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { 
-          systemInstruction,
-          tools 
+        config: {
+          systemInstruction: systemInstruction,
+          tools: tools && tools.length > 0 ? tools : undefined,
+          temperature: 0.7,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 8192,
+          safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+          ]
         }
       });
+
       return { 
         text: response.text || '', 
         functionCalls: response.functionCalls 
