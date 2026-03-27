@@ -20,7 +20,7 @@ const data = JSON.stringify({ type: command, payload });
 
 const options = {
   hostname: 'localhost',
-  port: 8888,
+  port: 3000,
   path: '/api/app/command',
   method: 'POST',
   headers: {
@@ -31,14 +31,14 @@ const options = {
 
 const req = http.request(options, (res) => {
   if (res.statusCode === 200) {
-    console.log(`[T2I] Command '${command}' sent to App.`);
+    console.log(`[SOVEREIGN] Command '${command}' sent to App.`);
   } else {
-    console.error(`[T2I] Failed to send command: ${res.statusCode}`);
+    console.error(`[SOVEREIGN] Failed to send command: ${res.statusCode}`);
   }
 });
 
 req.on('error', (error) => {
-  console.error(`[T2I] Error: ${error.message}`);
+  console.error(`[SOVEREIGN] Error: ${error.message}`);
 });
 
 req.write(data);

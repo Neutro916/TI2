@@ -1,5 +1,5 @@
 {
-  "name": "T2I terminal to Intel",
+  "name": "T2I :: SOVEREIGN",
   "description": "A mobile-first IDE and AI orchestration rig with integrated terminal and AI assistant.",
   "requestFramePermissions": ["camera", "microphone", "geolocation", "background-sync", "picture-in-picture"]
 }

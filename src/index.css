@@ -4,15 +4,26 @@
 @theme {
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-bg: #050505;
-  --color-bg1: #0a0a0f;
+  --color-bg: #0D0D0D;
+  --color-bg1: #050505;
   --color-bg2: #111111;
+  --color-bg3: #1A1A1A;
+  --color-bg4: #222222;
   --color-bd: #222222;
-  --color-txt1: #ffffff;
+  --color-bd2: #333333;
+  --color-bd3: #444444;
+  --color-txt1: #FFB000;
   --color-txt2: #aaaaaa;
   --color-txt3: #666666;
   --color-primary: #FFB000;
   --color-resonance: #0070f3;
+  
+  --color-green-primary: #00e676;
+  --color-red-primary: #ff453a;
+  --color-purple-primary: #bf5af2;
+  --color-yellow-primary: #ffd60a;
+  --color-cyan-primary: #5ac8fa;
+  --color-pink-primary: #ff375f;
 
   --shadow-pro: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
   --glass-border: 1px solid rgba(255, 255, 255, 0.05);
@@ -20,15 +31,15 @@
 
 @layer base {
   :root {
-    --bg: #050505;
-    --bg1: #080808;
-    --bg2: #0b0b0b;
-    --bg3: #0e0e0e;
-    --bg4: #121212;
-    --bd: #1a1a1a;
-    --bd2: #222222;
-    --bd3: #2a2a2a;
-    --txt: #ebebeb;
+    --bg: #0D0D0D;
+    --bg1: #050505;
+    --bg2: #111111;
+    --bg3: #1A1A1A;
+    --bg4: #222222;
+    --bd: #222222;
+    --bd2: #333333;
+    --bd3: #444444;
+    --txt: #FFB000;
     --txt2: #9a9a9a;
     --txt3: #5a5a5a;
     --primary: #FFB000; /* Amber Phosphor */
@@ -139,9 +150,13 @@
 
 .animate-resonance-pro {
   animation: resonance-pulse 0.012000s linear infinite; /* 1/83.33 approx */
-  /* Note: 83.33Hz is very fast for CSS, using a more perceivable 1.2s pulse for visual comfort while maintaining naming */
 }
 
 .animate-resonance-pulse {
   animation: resonance-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }

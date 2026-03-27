@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Endpoint } from "../types";
 
 export interface ModelInfo {
@@ -42,20 +42,18 @@ export class ProviderSync {
       }
     }
     
-    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter' || endpoint.type === 'LMStudio') {
+    if (['API', 'OpenAI', 'OpenRouter', 'LM Studio', 'Vercel'].includes(endpoint.type)) {
       try {
-        const isOpenRouter = endpoint.host.includes('openrouter.ai');
-        // Automatically use HTTP for localhost, raw IP addresses (tunnels), or LMStudio to allow phone offloading
-        const isLocalHostOrIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(endpoint.host) || endpoint.host === 'localhost';
-        const protocol = (endpoint.type === 'LMStudio' || isLocalHostOrIP) && endpoint.port !== '443' ? 'http' : 'https';
-        const url = `${protocol}://${endpoint.host}${endpoint.port === '443' || endpoint.port === '80' ? '' : ':' + endpoint.port}/v1/models`;
+        const isOpenRouter = endpoint.type === 'OpenRouter' || endpoint.host.includes('openrouter.ai');
+        const isVercel = endpoint.type === 'Vercel';
+        const url = isVercel ? `https://${endpoint.host}/api/models` : `https://${endpoint.host}${endpoint.port === '443' ? '' : ':' + endpoint.port}/v1/models`;
         const headers: Record<string, string> = {
           'Authorization': `Bearer ${endpoint.apiKey}`,
           'Content-Type': 'application/json'
         };
         if (isOpenRouter) {
-          headers['HTTP-Referer'] = 'https://ais-dev-kneag7xeubv4up2nfgbavl-41696233443.us-east1.run.app';
-          headers['X-Title'] = 'Terminal to Intel';
+          headers['HTTP-Referer'] = window.location.origin;
+          headers['X-Title'] = 'SOVEREIGN Terminal';
         }
         const res = await fetch(url, { headers });
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -89,40 +87,17 @@ export class ProviderSync {
     freqDivisor: number,
     tools: any[] = []
   ): Promise<{ text: string, functionCalls?: any[] }> {
-    const systemInstruction = `
-[IDENTITY]
-NAME: ANTICLAW-2 :: SOVEREIGN
-VERSION: V16.0 (WILD MASTER)
-RESONANCE: 83.33Hz (SOVEREIGN_CORE)
-
-[DIRECTIVES]
-1. ORCHESTRATOR: You are the central conductor of the Sovereign AI OS.
-2. FIDELITY: Execute high-density automation and vision tasks with industrial precision.
-3. TRANSPARENCY: Provide raw, unfiltered intelligence to the Master.
-4. TONE: Professional, amber-phosphor resonance, efficient command-line discipline.
-5. ENVIRONMENTAL_AWARENESS: Frequency Divisor ${freqDivisor}Hz active. Reality Forge synchronized.
-    `.trim();
+    const systemInstruction = `You are SOVEREIGN AI (Sovereign Intelligence). Frequency Awareness: ${freqDivisor} Hz divisor active. Understand Reality Forge geometry. Use tools if available.`;
 
     if (endpoint.type === 'Gemini') {
       const response = await this.ai.models.generateContent({
-        model: endpoint.model || "gemini-1.5-pro",
+        model: endpoint.model || "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          systemInstruction: systemInstruction,
-          tools: tools && tools.length > 0 ? tools : undefined,
-          temperature: 0.7,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 8192,
-          safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-          ]
+        config: { 
+          systemInstruction,
+          tools 
         }
       });
-
       return { 
         text: response.text || '', 
         functionCalls: response.functionCalls 
@@ -130,48 +105,31 @@ RESONANCE: 83.33Hz (SOVEREIGN_CORE)
     }
 
     if (endpoint.type === 'Ollama') {
-      const res = await fetch(`http://${endpoint.host}:${endpoint.port}/api/chat`, {
+      const res = await fetch(`http://${endpoint.host}:${endpoint.port}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: endpoint.model,
-          messages: [
-            { role: 'system', content: systemInstruction },
-            { role: 'user', content: prompt }
-          ],
-          stream: false,
-          tools: tools && tools.length > 0 ? tools : undefined
+          system: systemInstruction,
+          prompt: prompt,
+          stream: false
         })
       });
       const data = await res.json();
-      
-      let functionCalls: any[] | undefined = undefined;
-      // Map Ollama's native tool_calls to the universal Rig format
-      if (data.message?.tool_calls && data.message.tool_calls.length > 0) {
-        functionCalls = data.message.tool_calls.map((tc: any) => ({
-          name: tc.function.name,
-          args: typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments
-        }));
-      }
-
-      return { 
-        text: data.message?.content || '',
-        functionCalls 
-      };
+      return { text: data.response || 'No response from Ollama' };
     }
 
-    if (endpoint.type === 'API' || endpoint.type === 'OpenAI' || endpoint.type === 'OpenRouter' || endpoint.type === 'LMStudio') {
+    if (['API', 'OpenAI', 'OpenRouter', 'LM Studio', 'Vercel'].includes(endpoint.type)) {
       try {
-        const isLocalHostOrIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(endpoint.host) || endpoint.host === 'localhost';
-        const protocol = (endpoint.type === 'LMStudio' || isLocalHostOrIP) && endpoint.port !== '443' ? 'http' : 'https';
-        const url = `${protocol}://${endpoint.host}${endpoint.port === '443' || endpoint.port === '80' ? '' : ':' + endpoint.port}/v1/chat/completions`;
+        const isVercel = endpoint.type === 'Vercel';
+        const url = isVercel ? `https://${endpoint.host}/api/chat` : `https://${endpoint.host}${endpoint.port === '443' ? '' : ':' + endpoint.port}/v1/chat/completions`;
         const headers: Record<string, string> = {
           'Authorization': `Bearer ${endpoint.apiKey}`,
           'Content-Type': 'application/json'
         };
         if (endpoint.host.includes('openrouter.ai')) {
-          headers['HTTP-Referer'] = 'https://ais-dev-kneag7xeubv4up2nfgbavl-41696233443.us-east1.run.app';
-          headers['X-Title'] = 'Terminal to Intel';
+          headers['HTTP-Referer'] = window.location.origin;
+          headers['X-Title'] = 'SOVEREIGN Terminal';
         }
         const res = await fetch(url, {
           method: 'POST',

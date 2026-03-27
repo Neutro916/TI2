@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * T2I terminal to Intel - Universal Bridge Script
- * Run this in Termux or on your PC to give the T2I web app access to your local files.
+ * T2I :: SOVEREIGN - Universal Bridge Script
+ * Run this in Termux or on your PC to give the SOVEREIGN web app access to your local files.
  * 
  * Usage:
- * 1. npx t2i-terminal-to-intel
- * 2. Paste the printed IP into T2I's Host settings.
+ * 1. npx @sovereign/sdk
+ * 2. Paste the printed IP into SOVEREIGN's Host settings.
  */
 
 const express = require('express');
@@ -31,7 +31,7 @@ const ROOT = process.cwd();
 const DIST_PATH = path.join(__dirname, '../../dist');
 if (require('fs').existsSync(DIST_PATH)) {
   app.use(express.static(DIST_PATH));
-  console.log(`[T2I Bridge] Serving web UI from: ${DIST_PATH}`);
+  console.log(`[SOVEREIGN Bridge] Serving web UI from: ${DIST_PATH}`);
 }
 
 // IP Discovery
@@ -112,17 +112,17 @@ app.post('/api/shell', async (req, res) => {
 function startServer(port) {
   const server = app.listen(port, '0.0.0.0', () => {
     const ip = getLocalIP();
-    console.log(`\n🚀 T2I Bridge Live on http://${ip}:${port}`);
-    console.log(`🔗 Paste this into your T2I UI to sync.\n`);
-    console.log(`[T2I Bridge] Exposing: ${ROOT}`);
+    console.log(`\n🚀 SOVEREIGN Bridge Live on http://${ip}:${port}`);
+    console.log(`🔗 Paste this into your SOVEREIGN UI to sync.\n`);
+    console.log(`[SOVEREIGN Bridge] Exposing: ${ROOT}`);
   });
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.log(`[T2I Bridge] Port ${port} taken, trying ${port + 1}...`);
+      console.log(`[SOVEREIGN Bridge] Port ${port} taken, trying ${port + 1}...`);
       startServer(port + 1);
     } else {
-      console.error(`[T2I Bridge] Error: ${err.message}`);
+      console.error(`[SOVEREIGN Bridge] Error: ${err.message}`);
     }
   });
 }

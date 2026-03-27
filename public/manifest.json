@@ -1,23 +1,21 @@
 {
-  "name": "ANTICLAW-2",
-  "short_name": "ANTICLAW",
-  "description": "Sovereign AI Orchestration OS",
+  "name": "T2I :: SOVEREIGN",
+  "short_name": "SOVEREIGN",
+  "description": "Mobile-first AI Orchestration Rig",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
-  "theme_color": "#ffb000",
+  "theme_color": "#0070f3",
   "icons": [
     {
-      "src": "/favicon.png",
+      "src": "https://picsum.photos/seed/t2i/192/192",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
-      "src": "/favicon.png",
+      "src": "https://picsum.photos/seed/t2i/512/512",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "type": "image/png"
     }
   ]
 }

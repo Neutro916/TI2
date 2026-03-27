@@ -1,5 +1,5 @@
 {
-  "name": "anticlaw-2",
+  "name": "t2i-sovereign",
   "version": "1.0.0",
   "description": "Mobile-first AI Orchestration Rig",
   "main": "sdk/bin/t2i-bridge.js",
@@ -10,13 +10,14 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "start": "tsx server.ts",
+    "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "@xterm/addon-fit": "^0.11.0",
@@ -44,7 +45,6 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite": "^6.2.0"
   }
 }

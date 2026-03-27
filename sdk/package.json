@@ -1,11 +1,11 @@
 {
-  "name": "@t2i/sdk",
+  "name": "@sovereign/sdk",
   "version": "1.0.0",
-  "description": "T2I terminal to Intel - CLI SDK and Bridge",
-  "main": "bin/t2i-bridge.js",
+  "description": "T2I :: SOVEREIGN - CLI SDK and Bridge",
+  "main": "bin/sovereign-bridge.js",
   "bin": {
-    "t2i-bridge": "bin/t2i-bridge.js",
-    "t2i": "bin/t2i-cli.js"
+    "sovereign-bridge": "bin/sovereign-bridge.js",
+    "sovereign": "bin/sovereign-cli.js"
   },
   "dependencies": {
     "express": "^4.21.2",

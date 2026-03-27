@@ -1,54 +1,47 @@
-# ANTICLAW-2 :: SOVEREIGN (V13.0 Supreme Master)
+# T2I - Terminal to Intel (Supreme Master V13.0)
 
 <div align="center">
-<img width="400" alt="Anticlaw Wild Sigil" src="public/favicon.png" />
+<img width="400" alt="T2I Terminal Sigil" src="public/favicon.png" />
 <br/>
-<p><i>"The Ultimate AI Orchestration OS for the Sovereign Agent."</i></p>
+<p><i>"Sovereign AI Phone Host Port & Offload Rig."</i></p>
 </div>
 
 ---
 
-**ANTICLAW-2** is an industrial-tier, mobile-first AI Orchestration Rig. It transforms your local model stack (LM Studio, Open WebUI, OpenClaw) into a unified, globally accessible neural gateway. Designed for high-density automation, vision processing, and multi-agent swarm control.
+**T2I (Terminal to Intel)** is a high-density, mobile-first AI Orchestration Rig. It transforms your phone into a master controller that offloads heavy computation (LLMs, Vision, Browser Automation) to your computer's "Intel" (CPU/GPU). 
 
-## 🚀 How to Launch
+Inspired by Vercel's **Vibe-Coding IDE** and **AI Artifacts**, T2I provides a seamless bridge between mobile intents and desktop-grade AI power.
 
-### 1. Initial Setup
-Clone the repository and install the production dependencies:
+## 🚀 The T2I Offload Workflow
+
+1.  **The Phone (Host):** Runs the T2I PWA. It sends vision data, voice intents, or code snippets.
+2.  **The Rig (PC):** Receives the data via the **Vortex Bridge**, processes it using LM Studio (Local LLM), Playwright (Automation), or Python (MIMO logic), and streams the result back.
+3.  **The Output:** "Artifacts" (UI components, files, or terminal logs) appear instantly on the mobile device.
+
+## 🛠️ Neural Toolbox (Supreme V13.0)
+
+- **AI Artifacts Engine:** Real-time preview of AI-generated code and UI components.
+- **Vibe-Coding Bridge:** Direct integration with `autonomous_worker.py` for Python-based automation.
+- **MIMO Vortex Bridge:** 3-6-9 Pattern synchronization at 83.33Hz for stable neural streaming.
+- **APK Orchestration:** Integrated support for mobile dev tools (Orion, SSH Terminal, Code Runner).
+- **Service Sentinel:** Real-time monitoring of LM Studio (1234), Open WebUI (3000), and MCP Servers.
+
+## 📦 Getting Started
+
 ```bash
 git clone https://github.com/Neutro916/TI2.git
 cd TI2
 npm install
-```
-
-### 2. Neural Boot (Unified Shell)
-To launch the **Sovereign Gateway** and the **Unified Shell**:
-```bash
 npm run dev
 ```
-The rig will automatically bind to Port **8888** (or your specified `$env:PORT`) and broadcast over your local network.
-
-### 3. PWA Installation (Mobile Rig)
-Access the rig from your phone's browser (Chrome/Safari) using your PC's local IP:
-`http://192.168.x.x:8888`
-1.  Tap **"Add to Home Screen"**.
-2.  Launch the **ANTICLAW-2** icon from your app drawer.
-3.  Enjoy a full-screen, mobile-native AI IDE experience.
 
 ---
 
-## 🛠️ Neural Toolbox (V12.5+)
-
-- **Automation Core**: Integrated **Playwright** launchers for headless browser orchestration via the `[TOOLS]` tab.
-- **Vision Bridge**: Native **OCR** processing logic for image-to-text extraction.
-- **Neural Notes**: Persistent scratchpad for AI logic and training checkpoints.
-- **Service Sentinel**: Real-time health-polling for LM Studio (1234), Open WebUI (3000), and OpenClaw (18789).
+## 📱 Mobile Rig Setup
+1. Open `http://[YOUR_PC_IP]:3000` on your mobile browser.
+2. Tap **"Add to Home Screen"** to install the T2I PWA.
+3. Ensure **LM Studio** is running on the PC with the Local Server active.
 
 ---
 
-## ⚖️ License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
-
-**STATUS: SUPREME MASTER V13.0 DEPLOYED. CONSOLE READY. 10/10 RATING.**
+**STATUS: T2I TERMINAL TO INTEL :: SUPREME MASTER DEPLOYED. RESONANCE LOCKED.**

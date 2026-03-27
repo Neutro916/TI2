@@ -1,25 +1,32 @@
 import express from "express";
 import { createServer } from "http";
-import { Server } from "socket.io";
+import { Server as SocketServer } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { spawn, exec } from "child_process";
 import path from "path";
 import fs from "fs";
 import chokidar from "chokidar";
-import basicAuth from "express-basic-auth";
-import { createProxyMiddleware } from "http-proxy-middleware";
+import cors from "cors";
 import axios from "axios";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ErrorCode,
+  McpError
+} from "@modelcontextprotocol/sdk/types.js";
 
-// Sovereign Security Middleware
+// --- SOVEREIGN SECURITY ---
 const sovereignAuth = (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
-    if (process.env.OPENCLAW_GATEWAY_TOKEN && authHeader !== `Bearer ${process.env.OPENCLAW_GATEWAY_TOKEN}`) {
-        return res.status(401).json({ error: "ANTICLAW-2 AUTH FAILED. NEURAL BRIDGE LOCKED." });
+    if (process.env.T2I_GATEWAY_TOKEN && authHeader !== `Bearer ${process.env.T2I_GATEWAY_TOKEN}`) {
+        return res.status(401).json({ error: "T2I AUTH FAILED. NEURAL BRIDGE LOCKED." });
     }
     next();
 };
 
-// Sovereign Path Sanitization
 const safePath = (requestedPath: string) => {
     const absolute = path.resolve(process.cwd(), requestedPath);
     if (!absolute.startsWith(process.cwd())) {
@@ -28,68 +35,94 @@ const safePath = (requestedPath: string) => {
     return absolute;
 };
 
-const execAsync = (command: string): Promise<{stdout: string, stderr: string}> => {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve({ stdout, stderr });
+// --- MCP SERVER LOGIC ---
+const mcpServer = new McpServer(
+  { name: "t2i-master-rig", version: "13.0.0" },
+  { capabilities: { tools: {} } }
+);
+
+mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [
+    {
+      name: "read_file",
+      description: "Read a file from the T2I project rig",
+      inputSchema: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+      },
+    },
+    {
+      name: "execute_shell",
+      description: "Execute a command in the T2I rig terminal",
+      inputSchema: {
+        type: "object",
+        properties: { command: { type: "string" } },
+        required: ["command"],
+      },
+    }
+  ],
+}));
+
+mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  try {
+    switch (name) {
+      case "read_file": {
+        const content = fs.readFileSync(safePath(args?.path as string), "utf8");
+        return { content: [{ type: "text", text: content }] };
       }
-    });
-  });
-};
+      case "execute_shell": {
+        return new Promise((resolve) => {
+          exec(args?.command as string, (error, stdout, stderr) => {
+            resolve({ content: [{ type: "text", text: stdout || stderr }] });
+          });
+        });
+      }
+      default:
+        throw new McpError(ErrorCode.MethodNotFound, `Tool ${name} not found`);
+    }
+  } catch (error: any) {
+    return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+  }
+});
 
 async function startServer() {
   const app = express();
-
-  if (process.env.ADMIN_PASSWORD) {
-    app.use(basicAuth({
-      users: { 'admin': process.env.ADMIN_PASSWORD },
-      challenge: true,
-      realm: 'AI Studio Rig'
-    }));
-  }
-
   const httpServer = createServer(app);
-  const io = new Server(httpServer);
-  const PORT = process.env.PORT || 3000;
+  const io = new SocketServer(httpServer);
+  const PORT = 3000;
 
+  app.use(cors());
   app.use(express.json());
 
-  // Anticlaw 2 Service Sentinel
+  // Logging middleware
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+
+  // MCP SSE Endpoint
+  let transport: SSEServerTransport;
+  app.get("/mcp/sse", (req, res) => {
+    transport = new SSEServerTransport("/mcp/messages", res);
+    mcpServer.connect(transport);
+  });
+
+  app.post("/mcp/messages", (req, res) => {
+    transport.handlePostMessage(req, res);
+  });
+
+  // API routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", rig: "v11.5", core: "Anticlaw-2", master: "Sovereign" });
+    res.json({ status: "ok", rig: "v13.0", core: "T2I Terminal to Intel", master: "Sovereign" });
   });
 
-  const SERVICES = {
-    lmstudio: "http://localhost:1234",
-    openwebui: "http://localhost:3000",
-    openclaw: "http://localhost:18789"
-  };
-
-  app.get("/api/sentinel/status", async (req, res) => {
-    const status: any = {};
-    for (const [name, url] of Object.entries(SERVICES)) {
-        try { await axios.get(url, { timeout: 1000 }); status[name] = "ONLINE"; }
-        catch (e) { status[name] = "OFFLINE"; }
-    }
-    res.json(status);
-  });
-
-  // Neural Bridge Proxy (Local Model Gateway) - Sovereign Protected
-  app.use("/v1", sovereignAuth, createProxyMiddleware({
-      target: SERVICES.lmstudio,
-      changeOrigin: true,
-      pathRewrite: { "^/v1": "/v1" }
-  }));
-
-  // File System API - Sovereign Protected
   app.get("/api/files", sovereignAuth, (req, res) => {
     try {
       const files = fs.readdirSync(process.cwd()).filter(f => !f.startsWith('.') && f !== 'node_modules' && f !== 'dist');
       const data = files.map(file => {
-        const fullPath = safePath(file);
+        const fullPath = path.join(process.cwd(), file);
         try {
           const stats = fs.statSync(fullPath);
           if (stats.isFile()) {
@@ -103,7 +136,7 @@ async function startServer() {
       });
       res.json(data);
     } catch (error) {
-      res.status(500).json({ error: "Sovereign Audit Error: Failed to list files" });
+      res.status(500).json({ error: "Failed to list files" });
     }
   });
 
@@ -114,7 +147,7 @@ async function startServer() {
       const content = fs.readFileSync(safePath(filePath), 'utf-8');
       res.json({ content });
     } catch (error) {
-      res.status(500).json({ error: "Sovereign Audit Error: Failed to read file" });
+      res.status(500).json({ error: "Failed to read file" });
     }
   });
 
@@ -125,7 +158,7 @@ async function startServer() {
       fs.writeFileSync(safePath(filePath), content);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Sovereign Audit Error: Failed to write file" });
+      res.status(500).json({ error: "Failed to write file" });
     }
   });
 
@@ -135,59 +168,53 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // WebSocket Terminal - Sovereign Protected
-  io.use((socket, next) => {
-      const token = socket.handshake.auth.token || socket.handshake.query.token;
-      if (process.env.OPENCLAW_GATEWAY_TOKEN && token !== process.env.OPENCLAW_GATEWAY_TOKEN) {
-          return next(new Error("ANTICLAW-2 :: SOVEREIGN SECURITY BREACH. UNLINKED CLIENT."));
-      }
-      next();
+  app.get("/api/sentinel/status", sovereignAuth, async (req, res) => {
+    const endpoints = req.query.endpoints as string;
+    if (!endpoints) return res.json({});
+    
+    const endpointList = endpoints.split(',');
+    const status: any = {};
+    
+    for (const url of endpointList) {
+        try {
+            await axios.get(url, { timeout: 2000 });
+            status[url] = "ONLINE";
+        } catch (e) {
+            status[url] = "OFFLINE";
+        }
+    }
+    res.json(status);
   });
 
+  // Catch-all for /api that returns JSON 404
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
+  // WebSocket Terminal
   io.on("connection", (socket) => {
-    console.log("Terminal client connected");
-
-    // File Watcher
-    const watcher = chokidar.watch(process.cwd(), {
-      ignored: /(^|[\/\\])\..|node_modules|dist/,
-      persistent: true
-    });
-
-    watcher.on('all', (event, path) => {
-      socket.emit('fs:change', { event, path });
-    });
-    
-    // Create a shell process for each connection
-    const shell = spawn('bash', [], {
+    const shell = spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', [], {
       env: process.env,
       cwd: process.cwd()
     });
 
-    shell.stdout.on('data', (data) => {
-      socket.emit('terminal:output', data.toString());
-    });
+    shell.stdout.on('data', (data) => socket.emit('terminal:output', data.toString()));
+    shell.stderr.on('data', (data) => socket.emit('terminal:output', data.toString()));
+    shell.on('exit', (code) => socket.emit('terminal:exit', code));
+    socket.on('terminal:input', (data) => shell.stdin.write(data));
+    socket.on('disconnect', () => shell.kill());
 
-    shell.stderr.on('data', (data) => {
-      socket.emit('terminal:output', data.toString());
+    const watcher = chokidar.watch(process.cwd(), {
+      ignored: /(^|[\/\\])\..|node_modules|dist/,
+      persistent: true
     });
-
-    shell.on('exit', (code) => {
-      socket.emit('terminal:exit', code);
-    });
-
-    socket.on('terminal:input', (data) => {
-      shell.stdin.write(data);
-    });
-
-    socket.on('disconnect', () => {
-      shell.kill();
-    });
+    watcher.on('all', (event, path) => socket.emit('fs:change', { event, path }));
   });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true, host: true },
+      server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
