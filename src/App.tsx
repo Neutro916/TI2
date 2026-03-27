@@ -37,7 +37,8 @@ import {
   RefreshCw,
   ExternalLink,
   MonitorPlay,
-  ArrowUpRight
+  ArrowUpRight,
+  Upload
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProviderSync, ModelInfo } from "./services/providerSync";
@@ -1001,6 +1002,11 @@ export default function App() {
           >
             <div className="w-2 h-2 rounded-full shrink-0 shadow-[0_0_8px_rgba(0,0,0,0.2)]" style={{ backgroundColor: f.color }}></div>
             <span className="text-[10px] font-bold tracking-wider truncate flex-1 text-left uppercase">{f.name}</span>
+            <Trash2 
+              size={12} 
+              className="opacity-0 group-hover:opacity-100 hover:text-red-primary transition-all shrink-0" 
+              onClick={(e) => removeFile(i, e)}
+            />
             {i === curFileIdx && (
               <motion.div 
                 layoutId="activeFile"
@@ -1011,7 +1017,7 @@ export default function App() {
         ))}
       </div>
       
-      <div className="mt-auto p-3 border-t border-bd/30 bg-bg2/30">
+      <div className="mt-auto p-3 border-t border-bd/30 bg-bg2/30 flex flex-col gap-2">
         <button 
           onClick={() => {
             const name = prompt('File name:', 'untitled.txt');
@@ -1030,6 +1036,33 @@ export default function App() {
           <Plus size={14} className="group-hover:rotate-90 transition-transform" />
           <span className="text-[9px] font-black uppercase tracking-[2px]">New Source</span>
         </button>
+        <label className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-bg1 hover:bg-bg2 text-txt3 hover:text-txt transition-all border border-bd cursor-pointer group">
+          <Upload size={14} className="group-hover:-translate-y-0.5 transition-transform" />
+          <span className="text-[9px] font-black uppercase tracking-[2px]">Open Local</span>
+          <input 
+            type="file" 
+            className="hidden" 
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                const content = event.target?.result as string;
+                const name = file.name;
+                const isNoColor = name.endsWith('.txt') || name.endsWith('.md');
+                setFiles([...files, { 
+                  name, 
+                  lang: isNoColor ? 'txt' : name.split('.').pop() || 'js', 
+                  color: isNoColor ? 'var(--color-txt3)' : 'var(--color-txt2)', 
+                  raw: content 
+                }]);
+                setCurFileIdx(files.length);
+              };
+              reader.readAsText(file);
+              e.target.value = '';
+            }}
+          />
+        </label>
       </div>
     </div>
   );
@@ -1116,33 +1149,38 @@ export default function App() {
   );
 
   const renderEditor = (noSidebar = false) => {
-    const file = files[curFileIdx] || files[0] || { name: 'NO FILE', raw: '', lang: 'txt', color: '#888' };
-    const lines = (file && typeof file.raw === 'string') ? file.raw.split('\n') : ["No data available"];
+    const file = curFileIdx >= 0 && curFileIdx < files.length ? files[curFileIdx] : null;
+    const lines = file ? file.raw.split('\n') : [];
     
     return (
       <div className="flex flex-1 overflow-hidden h-full w-full">
         <div className="flex flex-col flex-1 overflow-hidden relative">
           {/* Merged Top Bar (Vim Bar + Breadcrumb) */}
           <div className={`h-6 flex items-center px-3 gap-3 shrink-0 text-[9px] font-bold transition-colors ${
+            !file ? 'bg-bg2 text-txt3' :
             vimMode === 'NORMAL' ? 'bg-primary text-black' : 
             vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
             'bg-purple-primary text-white'
           }`}>
-            <span className="tracking-widest min-w-[60px]">{vimMode}</span>
-            <span className="opacity-80">{file?.name || 'NONE'} {file && (isModified || file.name === '.gitignore') ? '[+]' : ''}</span>
+            <span className="tracking-widest min-w-[60px]">{!file ? 'IDLE' : vimMode}</span>
+            <span className="opacity-80">{file?.name || 'NO FILE'} {file && (isModified || file.name === '.gitignore') ? '[+]' : ''}</span>
             
-            <div className="h-3 w-[1px] bg-black/20 mx-2" />
-            <div className="flex items-center gap-2 opacity-80">
-              <Code2 size={10} />
-              <span>{file.lang?.toUpperCase() || 'TXT'}</span>
-            </div>
+            {file && (
+              <>
+                <div className="h-3 w-[1px] bg-black/20 mx-2" />
+                <div className="flex items-center gap-2 opacity-80">
+                  <Code2 size={10} />
+                  <span>{file.lang?.toUpperCase() || 'TXT'}</span>
+                </div>
 
-            <div className="ml-auto flex items-center gap-4 opacity-80">
-              <span>LN {curLine}</span>
-              <span>COL {curCol}</span>
-              <span>UTF-8</span>
-              <span>{Math.round((curLine/lines.length)*100)}%</span>
-            </div>
+                <div className="ml-auto flex items-center gap-4 opacity-80">
+                  <span>LN {curLine}</span>
+                  <span>COL {curCol}</span>
+                  <span>UTF-8</span>
+                  <span>{lines.length > 0 ? Math.round((curLine/lines.length)*100) : 0}%</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Editor Body */}
@@ -1153,6 +1191,22 @@ export default function App() {
                   <FileCode size={32} className="text-txt3/20" />
                 </div>
                 <span className="text-txt3 text-[10px] font-black tracking-[4px] uppercase opacity-30">Select a file to begin</span>
+                <button 
+                  onClick={() => {
+                    const name = `untitled-${files.length + 1}.txt`;
+                    setFiles([...files, { 
+                      name, 
+                      lang: 'txt', 
+                      color: 'var(--color-txt3)', 
+                      raw: '' 
+                    }]);
+                    setCurFileIdx(files.length);
+                  }}
+                  className="mt-4 px-6 py-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all text-[10px] font-bold tracking-widest uppercase flex items-center gap-2"
+                >
+                  <Plus size={14} />
+                  New Note
+                </button>
               </div>
             ) : (
               <>
@@ -1577,6 +1631,25 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Sidebar Tabs Selector */}
+              <div className="flex border-b border-bd bg-bg">
+                {[
+                  { id: 'explorer', icon: <FolderOpen size={14} />, label: 'Files' },
+                  { id: 'terminal', icon: <TerminalIcon size={14} />, label: 'Shell' },
+                  { id: 'scripts', icon: <Zap size={14} />, label: 'Forge' },
+                  { id: 'settings', icon: <Settings size={14} />, label: 'Config' }
+                ].map(tab => (
+                  <button 
+                    key={tab.id}
+                    onClick={() => setSidebarTab(tab.id as any)}
+                    className={`flex-1 flex flex-col items-center justify-center py-2 gap-1 transition-all ${sidebarTab === tab.id ? 'text-primary bg-primary/5' : 'text-txt3 hover:text-txt hover:bg-bg2'}`}
+                  >
+                    {tab.icon}
+                    <span className="text-[6px] font-black uppercase tracking-widest">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+
               {/* Sidebar Content */}
               <div className="flex-1 overflow-y-auto no-scrollbar">
                 {sidebarTab === 'explorer' && renderExplorerContent()}
@@ -1673,31 +1746,55 @@ export default function App() {
             
             {curPage === 'hub' || curPage === 'shell' ? (
               <div className="flex-1 flex overflow-x-auto no-scrollbar h-full">
-                <div
-                  onClick={() => setCurPage('shell')}
-                  className={`flex items-center gap-2 px-4 text-[11px] font-bold tracking-widest cursor-pointer border-r border-bd min-w-[120px] transition-all shrink-0 relative group ${curPage === 'shell' ? 'text-primary bg-bg' : 'text-txt3 hover:bg-bg2/50'}`}
-                >
-                  {curPage === 'shell' && <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary shadow-[0_0_10px_rgba(255,176,0,0.5)]" />}
-                  <TerminalIcon size={12} />
-                  <span>TERMINAL</span>
-                </div>
+                {curPage === 'hub' && curFileIdx >= 0 && curFileIdx < files.length && (
+                  <div 
+                    className="flex items-center gap-2 px-4 text-[11px] font-bold tracking-widest cursor-pointer border-r border-bd min-w-[120px] transition-all shrink-0 relative group text-primary bg-bg"
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary shadow-[0_0_10px_rgba(255,176,0,0.5)]" />
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: files[curFileIdx].color }}></div>
+                    <span className="truncate max-w-[80px]">{files[curFileIdx].name}</span>
+                    <X 
+                      size={12} 
+                      className="ml-auto opacity-0 group-hover:opacity-100 hover:text-red-primary transition-all" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurFileIdx(-1);
+                      }}
+                    />
+                  </div>
+                )}
+                {curPage === 'shell' && (
+                  <div
+                    className="flex items-center gap-2 px-4 text-[11px] font-bold tracking-widest cursor-pointer border-r border-bd min-w-[120px] transition-all shrink-0 relative group text-primary bg-bg"
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary shadow-[0_0_10px_rgba(255,176,0,0.5)]" />
+                    <TerminalIcon size={12} />
+                    <span>TERMINAL</span>
+                    <X 
+                      size={12} 
+                      className="ml-auto opacity-0 group-hover:opacity-100 hover:text-red-primary transition-all" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurPage('hub');
+                        setCurFileIdx(-1);
+                      }}
+                    />
+                  </div>
+                )}
                 <button 
                   onClick={() => {
-                    const name = prompt('File name:', 'untitled.txt');
-                    if (name) {
-                      const isNoColor = name.endsWith('.txt') || name.endsWith('.md');
-                      setFiles([...files, { 
-                        name, 
-                        lang: isNoColor ? 'txt' : 'js', 
-                        color: isNoColor ? 'var(--color-txt3)' : 'var(--color-txt2)', 
-                        raw: isNoColor ? '' : '// ' + name 
-                      }]);
-                      setCurFileIdx(files.length);
-                      setCurPage('hub');
-                    }
+                    const name = `untitled-${files.length + 1}.txt`;
+                    setFiles([...files, { 
+                      name, 
+                      lang: 'txt', 
+                      color: 'var(--color-txt3)', 
+                      raw: '' 
+                    }]);
+                    setCurFileIdx(files.length);
+                    setCurPage('hub');
                   }} 
                   className="flex items-center justify-center w-10 shrink-0 text-txt3 hover:text-txt hover:bg-bg2/50 transition-all border-r border-bd"
-                  title="New File"
+                  title="New Note"
                 >
                   <Plus size={14} />
                 </button>
