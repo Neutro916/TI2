@@ -95,19 +95,34 @@
   scrollbar-width: none;
 }
 
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #f1c40f;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #d4ac0d;
+}
+
 .scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 8px;
+  height: 8px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+  background: #000000;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--bd2);
-  border-radius: 10px;
+  background: #f1c40f;
+  border-radius: 4px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--primary);
+  background: #d4ac0d;
 }
 
 .glass-pro {

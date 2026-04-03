@@ -3,6 +3,8 @@ export interface FileData {
   lang: string;
   color: string;
   raw: string;
+  type?: 'file' | 'bash' | 'powershell';
+  shellId?: string;
 }
 
 export interface ShellLine {
@@ -49,6 +51,13 @@ export interface Message {
   thinking?: string;
 }
 
-export type PageType = 'editor' | 'shell' | 'display' | 'settings' | 'hub';
+export interface TerminalSession {
+  id: string;
+  name: string;
+  type: 'bash' | 'powershell' | 'endpoint';
+  endpointId?: string;
+}
+
+export type PageType = 'editor' | 'shell' | 'display' | 'settings' | 'hub' | 'terminal';
 export type VimMode = 'NORMAL' | 'INSERT' | 'VISUAL' | 'COMMAND';
 export type ChatMode = 'aider' | 'chat' | 'freq';

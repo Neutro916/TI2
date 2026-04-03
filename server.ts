@@ -193,7 +193,7 @@ async function startServer() {
 
   // WebSocket Terminal
   io.on("connection", (socket) => {
-    const shell = spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', [], {
+    const shell = spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', process.platform === 'win32' ? [] : ['-i'], {
       env: process.env,
       cwd: process.cwd()
     });

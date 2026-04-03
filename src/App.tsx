@@ -46,6 +46,7 @@ import { io, Socket } from "socket.io-client";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { LocalShell } from './components/LocalShell';
 import { 
   FileData, 
   ShellLine, 
@@ -53,7 +54,8 @@ import {
   Message, 
   PageType, 
   VimMode, 
-  ChatMode 
+  ChatMode,
+  TerminalSession
 } from './types';
 import { INITIAL_FILES, SHELL_PROMPTS, LANG_LABELS } from './constants';
 
@@ -62,9 +64,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 export default function App() {
   const [bridgeConfig, setBridgeConfig] = useState({ enabled: false, url: '', token: '' });
   const [curPage, setCurPage] = useState<PageType>('hub');
-  const [showTerminal, setShowTerminal] = useState(true);
-  const [terminalHeight, setTerminalHeight] = useState(35);
-  const [isResizing, setIsResizing] = useState(false);
   const [isChatHubOpen, setIsChatHubOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([
     { role: 'ai', content: 'Welcome to T2I :: SOVEREIGN. How can I assist you today?' }
@@ -75,6 +74,8 @@ export default function App() {
   const [isNavMinimized, setIsNavMinimized] = useState(false);
   const [curFileIdx, setCurFileIdx] = useState(0);
   const [files, setFiles] = useState<FileData[]>(INITIAL_FILES);
+  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
+  const [curTerminalIdx, setCurTerminalIdx] = useState(-1);
   const [vimMode, setVimMode] = useState<VimMode>('NORMAL');
   const [curLine, setCurLine] = useState(1);
   const [curCol, setCurCol] = useState(1);
@@ -83,10 +84,12 @@ export default function App() {
   const [aiProgress, setAiProgress] = useState(0);
   const [aiLog, setAiLog] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [showRightShell, setShowRightShell] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('/');
-  const [hasTerminalActivity, setHasTerminalActivity] = useState(false);
+
   const [editorScroll, setEditorScroll] = useState({ top: 0, height: 100, viewHeight: 20 });
   const [isAddingEndpoint, setIsAddingEndpoint] = useState(false);
+  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
   const [newEndpoint, setNewEndpoint] = useState<Partial<Endpoint>>({
     name: '',
     type: 'API',
@@ -131,25 +134,12 @@ export default function App() {
   const [monitorExpanded, setMonitorExpanded] = useState<Record<string, boolean>>({
     logs: true
   });
-  const [monitorLogs, setMonitorLogs] = useState<string[]>([
-    '[OLLAMA] Starting server...',
-    '[OLLAMA] Loading model: qwen2.5:0.8b',
-    '[RF] Frequency lock at 83.3333 Hz',
-    '[OLLAMA] Ready for requests'
-  ]);
-  const [shellInputHistory, setShellInputHistory] = useState<string[]>([]);
-  const [shellInputHistoryIdx, setShellInputHistoryIdx] = useState(-1);
-  const logEndRef = useRef<HTMLDivElement>(null);
+
   const minimapRef = useRef<HTMLDivElement>(null);
   const filesRef = useRef(files);
   useEffect(() => { filesRef.current = files; }, [files]);
 
-  const [shellTabs, setShellTabs] = useState<{id: string, name: string}[]>([
-    { id: '1', name: 'forge' },
-    { id: '2', name: 'worker' }
-  ]);
-  const [activeShellId, setActiveShellId] = useState('1');
-  const [shellInput, setShellInput] = useState('');
+
   const [authToken, setAuthToken] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -234,14 +224,14 @@ export default function App() {
       setDiscoveredModels(prev => ({ ...prev, [endpoint.id]: models }));
       if (models.length > 0) {
         setNotifications(prev => [...prev, { id: Math.random().toString(), message: `Discovered ${models.length} models for ${endpoint.name}` }]);
-        terminalsRef.current[activeShellId]?.writeln(`\x1b[32m[OK] Discovered ${models.length} models for ${endpoint.name}\x1b[0m`);
+
       } else {
         setNotifications(prev => [...prev, { id: Math.random().toString(), message: `No models found for ${endpoint.name}` }]);
       }
     } catch (e) {
       console.error('Sync failed', e);
       setNotifications(prev => [...prev, { id: Math.random().toString(), message: `Sync failed for ${endpoint.name}` }]);
-      terminalsRef.current[activeShellId]?.writeln(`\x1b[31m[ERR] Failed to sync models for ${endpoint.name}\x1b[0m`);
+
     }
   };
 
@@ -259,29 +249,6 @@ export default function App() {
 
   const [editingEndpoint, setEditingEndpoint] = useState<string | null>(null);
   const [wakeLock, setWakeLock] = useState<any>(null);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isResizing) return;
-    const height = ((window.innerHeight - e.clientY) / window.innerHeight) * 100;
-    if (height > 10 && height < 80) {
-      setTerminalHeight(height);
-    }
-  }, [isResizing]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false);
-  }, []);
-
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   const requestWakeLock = async () => {
     try {
@@ -309,84 +276,7 @@ export default function App() {
     };
   }, []);
 
-  const togglePiP = async () => {
-    if (window.self !== window.top) {
-      const id = Math.random().toString(36).substr(2, 9);
-      setNotifications(prev => [...prev, { id, message: 'PiP is restricted in iframes. Open in a new tab to use.' }]);
-      setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
-      return;
-    }
 
-    if (!('documentPictureInPicture' in window)) {
-      const id = Math.random().toString(36).substr(2, 9);
-      setNotifications(prev => [...prev, { id, message: 'Document PiP is not supported in this browser.' }]);
-      setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
-      return;
-    }
-
-    try {
-      const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
-        width: 600,
-        height: 400,
-      });
-
-      // Copy styles
-      [...document.styleSheets].forEach((styleSheet) => {
-        try {
-          const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
-          const style = document.createElement('style');
-          style.textContent = cssRules;
-          pipWindow.document.head.appendChild(style);
-        } catch (e) {
-          if (styleSheet.href) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = styleSheet.href;
-            pipWindow.document.head.appendChild(link);
-          }
-        }
-      });
-
-      const container = terminalContainersRef.current[activeShellId];
-      if (container) {
-        const parent = container.parentElement;
-        pipWindow.document.body.append(container);
-        pipWindow.document.body.style.background = '#000';
-        pipWindow.document.body.style.margin = '0';
-        pipWindow.document.body.style.overflow = 'hidden';
-        container.style.height = '100vh';
-        container.style.width = '100vw';
-        container.style.position = 'absolute';
-        container.style.inset = '0';
-        container.style.opacity = '1';
-        container.style.zIndex = '100';
-        container.style.pointerEvents = 'auto';
-
-        // Re-fit terminal
-        const term = terminalsRef.current[activeShellId];
-        if (term) {
-          setTimeout(() => (term as any).fitAddon?.fit(), 100);
-        }
-
-        pipWindow.addEventListener('pagehide', () => {
-          if (parent) {
-            parent.append(container);
-            container.style.height = '';
-            container.style.width = '';
-            container.style.position = 'absolute';
-            container.style.inset = '0';
-            setTimeout(() => (term as any).fitAddon?.fit(), 100);
-          }
-        });
-      }
-    } catch (e) {
-      console.error('PiP failed', e);
-    }
-  };
-
-  const terminalsRef = useRef<Record<string, Terminal>>({});
-  const socketsRef = useRef<Record<string, Socket>>({});
-  const terminalContainersRef = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (isDarkMode) {
@@ -396,85 +286,6 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  useEffect(() => {
-    shellTabs.forEach(tab => {
-      if (!terminalsRef.current[tab.id]) {
-        const term = new Terminal({
-          cursorBlink: true,
-          fontSize: 10,
-          fontFamily: 'JetBrains Mono, monospace',
-          theme: {
-            background: 'transparent',
-            foreground: '#ffffff',
-            cursor: '#0070f3',
-            selectionBackground: 'rgba(26, 159, 255, 0.3)',
-          },
-          allowTransparency: true,
-        });
-        const fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        (term as any).fitAddon = fitAddon;
-        terminalsRef.current[tab.id] = term;
-
-        const socket = io();
-        socketsRef.current[tab.id] = socket;
-
-        socket.on('terminal:output', (data) => {
-          term.write(data);
-          setHasTerminalActivity(true);
-        });
-
-        term.onData((data) => {
-          socket.emit('terminal:input', data);
-        });
-
-        // Initial greeting
-        term.writeln('\x1b[34mT2I :: SOVEREIGN – Reality Forge OS\x1b[0m');
-        term.writeln(`\x1b[32m[OK] Shell instance ${tab.name} ready\x1b[0m`);
-        term.write('\r\nforge:~$ ');
-      }
-    });
-
-    return () => {
-      // Cleanup logic if needed
-    };
-  }, [shellTabs]);
-
-  useEffect(() => {
-    const activeTerm = terminalsRef.current[activeShellId];
-    const container = terminalContainersRef.current[activeShellId];
-    if (activeTerm && container) {
-      activeTerm.open(container);
-      const fitAddon = new FitAddon();
-      activeTerm.loadAddon(fitAddon);
-      (activeTerm as any).fitAddon = fitAddon;
-      setTimeout(() => {
-        try {
-          fitAddon.fit();
-        } catch (e) {
-          console.warn('FitAddon fit failed', e);
-        }
-      }, 100);
-    }
-  }, [activeShellId, curPage]);
-
-  const handleResize = () => {
-    Object.values(terminalsRef.current).forEach(term => {
-      const fitAddon = (term as any).fitAddon;
-      if (fitAddon) {
-        try {
-          fitAddon.fit();
-        } catch (e) {
-          // Ignore errors during resize
-        }
-      }
-    });
-  };
-
-  useEffect(() => {
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useEffect(() => {
     if (editorConfig.cursorStyle !== 'block') return;
@@ -554,6 +365,12 @@ export default function App() {
       const res = await fetch(url, { headers });
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('Response is not JSON, returning default state');
+        setFiles(INITIAL_FILES);
+        return;
       }
       const data = await res.json();
       console.log('Fetched files data:', data);
@@ -649,6 +466,12 @@ export default function App() {
         }
         const res = await fetch(getApiUrl(`/api/sentinel/status?endpoints=${encodeURIComponent(urls)}`), { headers });
         if (res.ok) {
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.warn('Status response is not JSON, returning Offline Sovereign state');
+            setEndpoints(prev => prev.map(e => ({ ...e, status: 'OFFLINE' })));
+            return;
+          }
           const statusMap = await res.json();
           setEndpoints(prev => prev.map(e => {
             const protocol = e.port === '443' ? 'https' : 'http';
@@ -693,15 +516,6 @@ export default function App() {
         const id = Math.random().toString(36).substr(2, 9);
         setNotifications(prev => [...prev, { id, message: data.payload }]);
         setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
-      }
-    });
-
-    s.on('terminal:output', (data: string) => {
-      setHasTerminalActivity(true);
-      // Stream terminal output to monitor logs too
-      const clean = data.replace(/\x1B\[[0-9;]*[JKmsu]/g, '').trim();
-      if (clean) {
-        setMonitorLogs(prev => [...prev.slice(-100), `[LOG] ${clean}`]);
       }
     });
 
@@ -917,43 +731,6 @@ export default function App() {
     }, 40);
   };
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [monitorLogs]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      if (shellInput.trim()) {
-        socketsRef.current[activeShellId]?.emit('terminal:input', shellInput + '\n');
-        setShellInputHistory(prev => [shellInput, ...prev.slice(0, 49)]);
-        setShellInputHistoryIdx(-1);
-        setShellInput('');
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (shellInputHistoryIdx < shellInputHistory.length - 1) {
-        const nextIdx = shellInputHistoryIdx + 1;
-        setShellInputHistoryIdx(nextIdx);
-        setShellInput(shellInputHistory[nextIdx]);
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (shellInputHistoryIdx > 0) {
-        const nextIdx = shellInputHistoryIdx - 1;
-        setShellInputHistoryIdx(nextIdx);
-        setShellInput(shellInputHistory[nextIdx]);
-      } else if (shellInputHistoryIdx === 0) {
-        setShellInputHistoryIdx(-1);
-        setShellInput('');
-      }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const common = ['ls', 'cd', 'cat', 'npm', 'git', 'ollama', 'node', 'ti', 'forge'];
-      const match = common.find(c => c.startsWith(shellInput));
-      if (match) setShellInput(match);
-    }
-  };
-
   const removeFile = (idx: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (files.length === 1) return;
@@ -964,31 +741,6 @@ export default function App() {
     } else if (curFileIdx === idx) {
       setCurFileIdx(Math.max(0, idx - 1));
     }
-  };
-
-  const addShellTab = () => {
-    const newId = Math.random().toString(36).substr(2, 9);
-    setShellTabs(prev => [...prev, { id: newId, name: `shell-${prev.length + 1}` }]);
-    setActiveShellId(newId);
-  };
-
-  const removeShellTab = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (shellTabs.length === 1) return;
-    setShellTabs(prev => prev.filter(t => t.id !== id));
-    if (activeShellId === id) {
-      const remaining = shellTabs.filter(t => t.id !== id);
-      setActiveShellId(remaining[remaining.length - 1].id);
-    }
-    // Cleanup terminal and socket
-    terminalsRef.current[id]?.dispose();
-    delete terminalsRef.current[id];
-    socketsRef.current[id]?.disconnect();
-    delete socketsRef.current[id];
-  };
-
-  const renameShellTab = (id: string, newName: string) => {
-    setShellTabs(prev => prev.map(t => t.id === id ? { ...t, name: newName } : t));
   };
 
   const renderExplorerContent = () => (
@@ -1067,45 +819,74 @@ export default function App() {
     </div>
   );
 
-  const renderTerminalContent = () => (
-    <div className="flex flex-col h-full">
-      <div className="p-3 space-y-2">
-        <div className="flex items-center justify-between px-2 mb-2">
-          <span className="text-[8px] text-txt3 uppercase font-black tracking-[3px] opacity-50">Active Sessions</span>
-          <button onClick={addShellTab} className="p-1.5 hover:bg-primary/10 rounded-lg text-primary transition-colors">
-            <Plus size={14} />
-          </button>
-        </div>
-        <div className="space-y-1.5">
-          {shellTabs.map(tab => (
-            <div 
-              key={tab.id}
-              onClick={() => setActiveShellId(tab.id)}
-              className={`group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-all border ${
-                activeShellId === tab.id 
-                  ? 'bg-primary/10 border-primary/30 text-primary shadow-sm' 
-                  : 'border-transparent text-txt3 hover:bg-bg2 hover:text-txt'
-              }`}
+  const renderTerminalContent = () => {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-3 space-y-2">
+          <div className="flex items-center justify-between px-2 mb-2">
+            <span className="text-[8px] text-txt3 uppercase font-black tracking-[3px] opacity-50">Active Sessions</span>
+            <button 
+              onClick={() => {
+                const name = `Terminal-${terminals.length + 1}`;
+                const id = Math.random().toString(36).substr(2, 9);
+                setTerminals([...terminals, { 
+                  id,
+                  name, 
+                  type: 'bash'
+                }]);
+                setCurTerminalIdx(terminals.length);
+                setCurPage('terminal');
+              }} 
+              className="p-1.5 hover:bg-primary/10 rounded-lg text-primary transition-colors"
             >
-              <div className={`w-2 h-2 rounded-full ${activeShellId === tab.id ? 'bg-primary animate-pulse shadow-[0_0_8px_rgba(255,176,0,0.5)]' : 'bg-txt3/30'}`} />
-              <input 
-                className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest flex-1 cursor-pointer"
-                value={tab.name}
-                onChange={(e) => renameShellTab(tab.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <button 
-                onClick={(e) => removeShellTab(tab.id, e)}
-                className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-primary transition-all"
+              <Plus size={14} />
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {terminals.map((tab, i) => (
+              <div 
+                key={tab.id}
+                onClick={() => {
+                  setCurTerminalIdx(i);
+                  setCurPage('terminal');
+                }}
+                className={`group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-all border ${
+                  curTerminalIdx === i 
+                    ? 'bg-primary/10 border-primary/30 text-primary shadow-sm' 
+                    : 'border-transparent text-txt3 hover:bg-bg2 hover:text-txt'
+                }`}
               >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
+                <div className={`w-2 h-2 rounded-full ${curTerminalIdx === i ? 'bg-primary animate-pulse shadow-[0_0_8px_rgba(255,176,0,0.5)]' : 'bg-txt3/30'}`} />
+                <span className="text-[10px] font-black uppercase tracking-widest flex-1 truncate">
+                  {tab.name}
+                </span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newTerminals = terminals.filter((_, idx) => idx !== i);
+                    setTerminals(newTerminals);
+                    if (curTerminalIdx >= newTerminals.length) {
+                      setCurTerminalIdx(newTerminals.length - 1);
+                    } else if (curTerminalIdx === i) {
+                      setCurTerminalIdx(Math.max(0, i - 1));
+                    }
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-primary transition-all"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {terminals.length === 0 && (
+              <div className="text-[9px] text-txt3/50 text-center py-4 font-bold uppercase tracking-widest">
+                No active shells
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderScriptsContent = () => (
     <div className="flex flex-col h-full">
@@ -1128,8 +909,6 @@ export default function App() {
                 <button 
                   key={s.name}
                   onClick={() => {
-                    const socket = socketsRef.current[activeShellId];
-                    if (socket) socket.emit('terminal:input', s.cmd + '\n');
                     setNotifications(prev => [...prev, { id: Date.now().toString(), message: `Running: ${s.name}` }]);
                   }}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl bg-bg2/50 hover:bg-bg2 border border-bd/30 hover:border-primary/30 text-txt3 hover:text-txt transition-all group text-left shadow-sm"
@@ -1162,8 +941,10 @@ export default function App() {
             vimMode === 'INSERT' ? 'bg-green-primary text-black' : 
             'bg-purple-primary text-white'
           }`}>
-            <span className="tracking-widest min-w-[60px]">{!file ? 'IDLE' : vimMode}</span>
-            <span className="opacity-80">{file?.name || 'NO FILE'} {file && (isModified || file.name === '.gitignore') ? '[+]' : ''}</span>
+            <span className="tracking-widest min-w-[60px]">
+              {!file ? 'IDLE' : vimMode}
+            </span>
+            <span className="opacity-80">{file?.name || 'NO FILE'} {file && file.type === 'file' && (isModified || file.name === '.gitignore') ? '[+]' : ''}</span>
             
             {file && (
               <>
@@ -1191,43 +972,66 @@ export default function App() {
                   <FileCode size={32} className="text-txt3/20" />
                 </div>
                 <span className="text-txt3 text-[10px] font-black tracking-[4px] uppercase opacity-30">Select a file to begin</span>
-                <button 
-                  onClick={() => {
-                    const name = `untitled-${files.length + 1}.txt`;
-                    setFiles([...files, { 
-                      name, 
-                      lang: 'txt', 
-                      color: 'var(--color-txt3)', 
-                      raw: '' 
-                    }]);
-                    setCurFileIdx(files.length);
-                  }}
-                  className="mt-4 px-6 py-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all text-[10px] font-bold tracking-widest uppercase flex items-center gap-2"
-                >
-                  <Plus size={14} />
-                  New Note
-                </button>
+                <div className="flex items-center gap-4 mt-4">
+                  <button 
+                    onClick={() => {
+                      const name = `untitled-${files.length + 1}.txt`;
+                      setFiles([...files, { 
+                        name, 
+                        lang: 'txt', 
+                        color: 'var(--color-txt3)', 
+                        raw: '',
+                        type: 'file'
+                      }]);
+                      setCurFileIdx(files.length);
+                    }}
+                    className="px-6 py-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all text-[10px] font-bold tracking-widest uppercase flex items-center gap-2"
+                  >
+                    <Plus size={14} />
+                    New Note
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const name = `Terminal-${terminals.length + 1}`;
+                      const id = Math.random().toString(36).substr(2, 9);
+                      setTerminals([...terminals, { 
+                        id,
+                        name, 
+                        type: 'bash'
+                      }]);
+                      setCurTerminalIdx(terminals.length);
+                      setCurPage('terminal');
+                    }}
+                    className="px-6 py-2 rounded-full bg-blue-primary/10 text-blue-primary hover:bg-blue-primary/20 transition-all text-[10px] font-bold tracking-widest uppercase flex items-center gap-2"
+                  >
+                    <TerminalIcon size={14} />
+                    New Shell
+                  </button>
+                </div>
               </div>
             ) : (
               <>
-                <div 
-                  id="line-numbers"
-                  className="w-12 bg-bg1/50 border-r border-bd py-4 text-right pr-3 text-[10px] font-mono text-txt3/40 shrink-0 select-none overflow-hidden" 
-                  style={{ lineHeight: editorConfig.lineHeight }}
-                >
-                  {lines.map((_, i) => (
-                    <div key={i} className={i === curLine - 1 ? 'text-primary font-bold' : ''}>{i + 1}</div>
-                  ))}
-                </div>
-                <div className="flex-1 overflow-auto no-scrollbar bg-transparent relative">
-                  <div 
-                    className="absolute inset-0 p-4 font-mono pointer-events-none whitespace-pre overflow-hidden opacity-90"
-                    style={{ 
-                      fontSize: `${editorConfig.fontSize}px`, 
-                      lineHeight: editorConfig.lineHeight,
-                      color: editorConfig.colors.foreground
-                    }}
-                  >
+                {/* Render text editor if active file is a file */}
+                {file.type === 'file' && (
+                  <>
+                    <div 
+                      id="line-numbers"
+                      className="w-12 bg-bg1/50 border-r border-bd py-4 text-right pr-3 text-[10px] font-mono text-txt3/40 shrink-0 select-none overflow-hidden" 
+                      style={{ lineHeight: editorConfig.lineHeight }}
+                    >
+                      {lines.map((_, i) => (
+                        <div key={i} className={i === curLine - 1 ? 'text-primary font-bold' : ''}>{i + 1}</div>
+                      ))}
+                    </div>
+                    <div className="flex-1 overflow-auto no-scrollbar bg-transparent relative">
+                      <div 
+                        className="absolute inset-0 p-4 font-mono pointer-events-none whitespace-pre overflow-hidden opacity-90"
+                        style={{ 
+                          fontSize: `${editorConfig.fontSize}px`, 
+                          lineHeight: editorConfig.lineHeight,
+                          color: editorConfig.colors.foreground
+                        }}
+                      >
                     {lines.map((line, i) => (
                       <div 
                         key={i} 
@@ -1326,7 +1130,7 @@ export default function App() {
 
                 {/* Live Preview Panel */}
                 <AnimatePresence>
-                  {showPreview && (
+                  {showPreview && file.type === 'file' && (
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: '45%' }}
@@ -1356,166 +1160,51 @@ export default function App() {
                             </div>
                             <div className="space-y-1">
                               <p className="text-black font-bold text-xs uppercase tracking-widest">No Visual Output</p>
-                              <p className="text-gray-400 text-[10px] max-w-[200px]">Preview is optimized for HTML/CSS. Viewing raw source for {file.name}.</p>
+                              <p className="text-gray-400 text-[10px] max-w-[200px]">Preview is optimized for HTML/CSS.</p>
                             </div>
-                            <pre className="bg-gray-50 p-4 rounded-lg text-[10px] text-gray-600 font-mono text-left w-full max-h-[200px] overflow-auto border border-gray-100">
-                              {file.raw}
-                            </pre>
                           </div>
                         )}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
+                  </>
+                )}
               </>
             )}
           </div>
 
 
         </div>
-      </div>
-    );
-  };
 
-  const renderShell = (noSidebar = false) => {
-    return (
-      <div className={`flex flex-1 h-full overflow-hidden ${noSidebar ? 'bg-bg' : 'bg-bg1'}`}>
-        {/* Main Terminal Area */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Header / Toolbar - Hidden in split view to merge with divider */}
-          {!noSidebar && (
-            <div className="h-10 bg-bg border-b border-bd flex items-center px-4 justify-between shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-primary animate-pulse" />
-                  <span className="text-[10px] text-txt font-black uppercase tracking-[2px]">
-                    {shellTabs.find(t => t.id === activeShellId)?.name || 'Terminal'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button onClick={() => setCurPage('display')} className="p-2 text-txt3 hover:text-primary transition-colors rounded hover:bg-bd/30" title="GUI Display">
-                  <Monitor size={14} />
-                </button>
-                <button onClick={migrateShellOutput} className="p-2 text-txt3 hover:text-primary transition-colors rounded hover:bg-bd/30" title="Migrate to Editor">
-                  <ArrowUpRight size={14} />
-                </button>
-                <button onClick={togglePiP} className="p-2 text-txt3 hover:text-green-primary transition-colors rounded hover:bg-bd/30" title="Picture-in-Picture">
-                  <MonitorPlay size={14} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Terminal Container */}
-          <div className={`flex-1 relative bg-black/40 rounded-xl border border-bd/30 overflow-hidden shadow-inner ${noSidebar ? 'm-2' : 'm-4'}`}>
-            {shellTabs.map(tab => (
-              <div 
-                key={tab.id}
-                ref={el => { if (el) terminalContainersRef.current[tab.id] = el; }}
-                className={`absolute inset-0 p-3 font-mono ${activeShellId === tab.id ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
-              />
-            ))}
-            
-            {!hasTerminalActivity && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none p-8 text-center">
-                <TerminalIcon size={noSidebar ? 24 : 32} className="text-txt3/10 mb-4" />
-                <h2 className={`text-txt3/10 font-black uppercase tracking-[8px] mb-1 ${noSidebar ? 'text-sm' : 'text-xl'}`}>Idle</h2>
-              </div>
-            )}
-
-            {/* Quick Actions Overlay in Split View */}
-            {noSidebar && (
-              <div className="absolute top-2 right-2 flex gap-1 z-20">
-                <button onClick={migrateShellOutput} className="p-1.5 bg-black/60 border border-bd/50 rounded text-txt3 hover:text-primary transition-all backdrop-blur-sm" title="Migrate">
-                  <ArrowUpRight size={10} />
-                </button>
-                <button onClick={togglePiP} className="p-1.5 bg-black/60 border border-bd/50 rounded text-txt3 hover:text-green-primary transition-all backdrop-blur-sm" title="PiP">
-                  <MonitorPlay size={10} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Terminal Footer Info */}
-          <div className="h-5 bg-bg1/50 border-t border-bd flex items-center px-4 gap-4 text-[7px] text-txt3 font-bold uppercase tracking-widest shrink-0">
-            <div className="flex items-center gap-1.5">
-              <Cpu size={8} />
-              <span>12%</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Activity size={8} />
-              <span>14ms</span>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <span className="text-primary">Connected</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Add Script Modal */}
+        {/* Right Shell Panel */}
         <AnimatePresence>
-          {isAddingScript && (
+          {showRightShell && (
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+              initial={{ width: 0 }}
+              animate={{ width: '45%' }}
+              exit={{ width: 0 }}
+              className="border-l border-bd bg-bg overflow-hidden flex flex-col z-10 shadow-2xl"
             >
-              <motion.div 
-                initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                className="bg-bg border border-bd rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
-              >
-                <div className="h-12 bg-bg1 border-b border-bd flex items-center justify-between px-6">
-                  <div className="flex items-center gap-2">
-                    <Zap size={14} className="text-primary" />
-                    <span className="text-[10px] font-black uppercase tracking-[2px] text-txt">New Quick Script</span>
-                  </div>
-                  <button onClick={() => setIsAddingScript(false)} className="p-1 hover:bg-bd rounded transition-colors">
-                    <X size={16} className="text-txt3" />
-                  </button>
+              <div className="h-10 bg-bg1 border-b border-bd flex items-center px-4 justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <TerminalIcon size={14} className="text-primary" />
+                  <span className="text-[9px] text-txt font-black uppercase tracking-[2px]">Local Shell</span>
                 </div>
-                <div className="p-6 space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[8px] text-txt3 uppercase tracking-[2px] font-bold">Script Name</label>
-                    <input 
-                      className="w-full bg-bg1 border border-bd rounded-xl p-3 text-xs text-txt outline-none focus:border-primary transition-colors font-bold"
-                      value={newScript.name}
-                      onChange={e => setNewScript({...newScript, name: e.target.value})}
-                      placeholder="e.g. Build Production"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[8px] text-txt3 uppercase tracking-[2px] font-bold">CLI Command</label>
-                    <input 
-                      className="w-full bg-bg1 border border-bd rounded-xl p-3 text-xs text-txt outline-none focus:border-primary transition-colors font-mono"
-                      value={newScript.cmd}
-                      onChange={e => setNewScript({...newScript, cmd: e.target.value})}
-                      placeholder="npm run build"
-                    />
-                  </div>
-                  <button 
-                    onClick={() => {
-                      const next = [...favScripts];
-                      next[0].items.push(newScript);
-                      setFavScripts(next);
-                      setIsAddingScript(false);
-                      setNewScript({ name: '', cmd: '', icon: '⚡' });
-                    }}
-                    className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-black text-[10px] tracking-[3px] rounded-xl mt-4 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
-                  >
-                    SAVE TO SIDEBAR
-                  </button>
-                </div>
-              </motion.div>
+                <button onClick={() => setShowRightShell(false)} className="p-1 hover:bg-bd rounded transition-colors">
+                  <X size={14} className="text-txt3" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <LocalShell type="bash" shellId="right-shell" />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
     );
   };
+
 
 
   const renderDisplay = () => {
@@ -1592,11 +1281,61 @@ export default function App() {
     );
   };
 
-  const migrateShellOutput = () => {
-    // In a real app, we'd get the actual terminal content. 
-    // For this demo, we'll use a placeholder or the last command.
-    const content = "Terminal Output Migration\n---\n" + monitorLogs.join('\n');
-    migrateIdea(content);
+  const renderTerminalPage = () => {
+    const activeTerminal = curTerminalIdx >= 0 && curTerminalIdx < terminals.length ? terminals[curTerminalIdx] : null;
+
+    return (
+      <div className="flex flex-col h-full w-full bg-bg">
+        {/* Terminal Top Bar */}
+        <div className="h-8 bg-bg2 border-b border-bd flex items-center px-3 gap-3 shrink-0 text-[9px] font-bold">
+          <span className="tracking-widest text-primary">TERMINAL</span>
+          {activeTerminal && (
+            <>
+              <div className="h-3 w-[1px] bg-black/20 mx-2" />
+              <span className="opacity-80">{activeTerminal.name}</span>
+              <span className="opacity-50 ml-auto">{activeTerminal.type.toUpperCase()}</span>
+            </>
+          )}
+        </div>
+
+        {/* Terminal Body */}
+        <div className="flex-1 relative overflow-hidden bg-[#050505]">
+          {!activeTerminal ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 h-full">
+              <div className="w-16 h-16 rounded-full bg-bd/10 flex items-center justify-center border border-bd/20">
+                <TerminalIcon size={32} className="text-txt3/20" />
+              </div>
+              <span className="text-txt3 text-[10px] font-black tracking-[4px] uppercase opacity-30">No Active Sessions</span>
+              <button 
+                onClick={() => {
+                  const name = `Terminal-${terminals.length + 1}`;
+                  const id = Math.random().toString(36).substr(2, 9);
+                  setTerminals([...terminals, { 
+                    id,
+                    name, 
+                    type: 'bash'
+                  }]);
+                  setCurTerminalIdx(terminals.length);
+                }}
+                className="mt-4 px-6 py-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all text-[10px] font-bold tracking-widest uppercase flex items-center gap-2"
+              >
+                <Plus size={14} />
+                New Shell
+              </button>
+            </div>
+          ) : (
+            terminals.map((t, i) => (
+              <div 
+                key={t.id} 
+                className={`absolute inset-0 ${i === curTerminalIdx ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}
+              >
+                <LocalShell type={t.type === 'endpoint' ? 'bash' : t.type} shellId={t.id} />
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
   };
 
   const renderHub = () => {
@@ -1634,14 +1373,17 @@ export default function App() {
               {/* Sidebar Tabs Selector */}
               <div className="flex border-b border-bd bg-bg">
                 {[
-                  { id: 'explorer', icon: <FolderOpen size={14} />, label: 'Files' },
-                  { id: 'terminal', icon: <TerminalIcon size={14} />, label: 'Shell' },
-                  { id: 'scripts', icon: <Zap size={14} />, label: 'Forge' },
-                  { id: 'settings', icon: <Settings size={14} />, label: 'Config' }
+                  { id: 'explorer', icon: <FolderOpen size={14} />, label: 'Files', page: 'hub' },
+                  { id: 'terminal', icon: <TerminalIcon size={14} />, label: 'Terminal', page: 'terminal' },
+                  { id: 'scripts', icon: <Zap size={14} />, label: 'Forge', page: 'hub' },
+                  { id: 'settings', icon: <Settings size={14} />, label: 'Config', page: 'settings' }
                 ].map(tab => (
                   <button 
                     key={tab.id}
-                    onClick={() => setSidebarTab(tab.id as any)}
+                    onClick={() => {
+                      setSidebarTab(tab.id as any);
+                      setCurPage(tab.page as any);
+                    }}
                     className={`flex-1 flex flex-col items-center justify-center py-2 gap-1 transition-all ${sidebarTab === tab.id ? 'text-primary bg-primary/5' : 'text-txt3 hover:text-txt hover:bg-bg2'}`}
                   >
                     {tab.icon}
@@ -1712,25 +1454,21 @@ export default function App() {
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Main Content Workspace */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            {curPage === 'settings' ? (
-              <div className="flex-1 overflow-y-auto p-6 bg-bg">
-                {renderSettings()}
+            <div className={`flex-1 overflow-y-auto p-6 bg-bg ${curPage === 'settings' ? 'block' : 'hidden'}`}>
+              {renderSettings()}
+            </div>
+            <div className={`flex-1 flex-col overflow-hidden ${curPage === 'display' ? 'flex' : 'hidden'}`}>
+              {renderDisplay()}
+            </div>
+            <div className={`flex-1 flex-col overflow-hidden ${curPage === 'terminal' ? 'flex' : 'hidden'}`}>
+              {renderTerminalPage()}
+            </div>
+
+            <div className={`flex-1 flex-col overflow-hidden ${curPage === 'hub' || curPage === 'editor' ? 'flex' : 'hidden'}`}>
+              <div className="flex-1 min-h-0 relative flex flex-col">
+                {renderEditor(true)}
               </div>
-            ) : curPage === 'display' ? (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {renderDisplay()}
-              </div>
-            ) : curPage === 'shell' ? (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {renderShell(true)}
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 min-h-0 relative flex flex-col">
-                  {renderEditor(true)}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           {/* Unified Header (Moved to Bottom) */}
@@ -1744,7 +1482,7 @@ export default function App() {
               </button>
             )}
             
-            {curPage === 'hub' || curPage === 'shell' ? (
+            {curPage === 'hub' ? (
               <div className="flex-1 flex overflow-x-auto no-scrollbar h-full">
                 {curPage === 'hub' && curFileIdx >= 0 && curFileIdx < files.length && (
                   <div 
@@ -1763,41 +1501,78 @@ export default function App() {
                     />
                   </div>
                 )}
-                {curPage === 'shell' && (
-                  <div
-                    className="flex items-center gap-2 px-4 text-[11px] font-bold tracking-widest cursor-pointer border-r border-bd min-w-[120px] transition-all shrink-0 relative group text-primary bg-bg"
+
+                <div className="relative flex">
+                  <button 
+                    onClick={() => setIsPlusMenuOpen(!isPlusMenuOpen)} 
+                    className="flex items-center justify-center w-10 shrink-0 text-txt3 hover:text-txt hover:bg-bg2/50 transition-all border-r border-bd"
+                    title="New Tab"
                   >
-                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary shadow-[0_0_10px_rgba(255,176,0,0.5)]" />
-                    <TerminalIcon size={12} />
-                    <span>TERMINAL</span>
-                    <X 
-                      size={12} 
-                      className="ml-auto opacity-0 group-hover:opacity-100 hover:text-red-primary transition-all" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCurPage('hub');
-                        setCurFileIdx(-1);
-                      }}
-                    />
-                  </div>
-                )}
-                <button 
-                  onClick={() => {
-                    const name = `untitled-${files.length + 1}.txt`;
-                    setFiles([...files, { 
-                      name, 
-                      lang: 'txt', 
-                      color: 'var(--color-txt3)', 
-                      raw: '' 
-                    }]);
-                    setCurFileIdx(files.length);
-                    setCurPage('hub');
-                  }} 
-                  className="flex items-center justify-center w-10 shrink-0 text-txt3 hover:text-txt hover:bg-bg2/50 transition-all border-r border-bd"
-                  title="New Note"
-                >
-                  <Plus size={14} />
-                </button>
+                    <Plus size={14} />
+                  </button>
+                  {isPlusMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsPlusMenuOpen(false)} />
+                      <div className="absolute bottom-full left-0 mb-1 w-48 bg-bg1 border border-bd rounded-lg shadow-xl z-50 overflow-hidden">
+                        <button 
+                          onClick={() => {
+                            const name = `untitled-${files.length + 1}.txt`;
+                            setFiles([...files, { 
+                              name, 
+                              lang: 'txt', 
+                              color: 'var(--color-txt3)', 
+                              raw: '',
+                              type: 'file'
+                            }]);
+                            setCurFileIdx(files.length);
+                            setCurPage('hub');
+                            setIsPlusMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-txt3 hover:text-txt hover:bg-bg2 transition-colors flex items-center gap-2"
+                        >
+                          <FileCode size={14} />
+                          Editor Note
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const name = `Terminal-${terminals.length + 1}`;
+                            const id = Math.random().toString(36).substr(2, 9);
+                            setTerminals([...terminals, { 
+                              id,
+                              name, 
+                              type: 'bash'
+                            }]);
+                            setCurTerminalIdx(terminals.length);
+                            setCurPage('terminal');
+                            setIsPlusMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-txt3 hover:text-txt hover:bg-bg2 transition-colors flex items-center gap-2"
+                        >
+                          <TerminalIcon size={14} />
+                          Terminal (Bash)
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const name = `PS-${terminals.length + 1}`;
+                            const id = Math.random().toString(36).substr(2, 9);
+                            setTerminals([...terminals, { 
+                              id,
+                              name, 
+                              type: 'powershell'
+                            }]);
+                            setCurTerminalIdx(terminals.length);
+                            setCurPage('terminal');
+                            setIsPlusMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-txt3 hover:text-txt hover:bg-bg2 transition-colors flex items-center gap-2"
+                        >
+                          <Monitor size={14} />
+                          PS Shell
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex-1 flex items-center px-4">
@@ -1808,12 +1583,15 @@ export default function App() {
             )}
 
             <div className="flex items-center px-2 gap-1 border-l border-bd bg-bg1 shadow-[-10px_0_15px_rgba(0,0,0,0.2)] shrink-0">
-              {(curPage === 'hub' || curPage === 'shell') && (
-                <>
-                  <button onClick={saveFile} className={`p-2 rounded hover:bg-bg2 transition-all ${isModified ? 'text-primary animate-pulse' : 'text-txt3'}`} title="Save">
-                    <Save size={16} />
-                  </button>
-                </>
+              {(curPage === 'hub' || curPage === 'editor') && (
+                <button onClick={() => setShowRightShell(!showRightShell)} className={`p-2 rounded hover:bg-bg2 transition-all ${showRightShell ? 'text-primary' : 'text-txt3'}`} title="Toggle Shell Panel">
+                  <TerminalIcon size={16} />
+                </button>
+              )}
+              {(curPage === 'hub' || curPage === 'editor') && (
+                <button onClick={saveFile} className={`p-2 rounded hover:bg-bg2 transition-all ${isModified ? 'text-primary animate-pulse' : 'text-txt3'}`} title="Save">
+                  <Save size={16} />
+                </button>
               )}
               <button onClick={() => setIsChatHubOpen(true)} className="p-2 rounded hover:bg-bg2 transition-all text-txt3 hover:text-primary" title="Chat Hub">
                 <Sparkles size={16} />
@@ -2068,13 +1846,13 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <button 
-                  onClick={() => socketsRef.current[activeShellId]?.emit('terminal:input', 'pkg install\n')}
+                  onClick={() => setNotifications(prev => [...prev, { id: Date.now().toString(), message: "Terminal removed. Cannot run command." }])}
                   className="w-full text-left text-[9px] text-txt3 hover:text-txt font-mono"
                 >
                   {'>'} Run 'pkg install'
                 </button>
                 <button 
-                  onClick={() => socketsRef.current[activeShellId]?.emit('terminal:input', 'ollama serve\n')}
+                  onClick={() => setNotifications(prev => [...prev, { id: Date.now().toString(), message: "Terminal removed. Cannot run command." }])}
                   className="w-full text-left text-[9px] text-txt3 hover:text-txt font-mono"
                 >
                   {'>'} Run 'ollama serve'
@@ -2373,6 +2151,25 @@ export default function App() {
                         onClick={() => syncModels(api)}
                       >
                         SYNC
+                      </button>
+                      <button 
+                        className="flex-1 h-8 border border-bd2 text-blue-primary text-[9px] tracking-wider rounded hover:bg-blue-primary/10 transition-colors uppercase font-bold flex items-center justify-center gap-1"
+                        onClick={() => {
+                          const name = `EP-${api.name}`;
+                          const id = Math.random().toString(36).substr(2, 9);
+                          setTerminals([...terminals, { 
+                            id,
+                            name, 
+                            type: 'endpoint',
+                            endpointId: api.id
+                          }]);
+                          setCurTerminalIdx(terminals.length);
+                          setCurPage('terminal');
+                          setSidebarTab('terminal');
+                        }}
+                      >
+                        <TerminalIcon size={10} />
+                        SHELL
                       </button>
                       <button 
                         className="w-8 h-8 border border-bd2 text-red-primary flex items-center justify-center rounded hover:bg-red-primary/10 transition-colors"
