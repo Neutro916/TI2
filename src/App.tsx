@@ -46,6 +46,7 @@ import { io, Socket } from "socket.io-client";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import MonacoEditorComponent from './components/MonacoEditor';
 import { 
   FileData, 
   ShellLine, 
@@ -1210,77 +1211,22 @@ export default function App() {
               </div>
             ) : (
               <>
-                <div 
-                  id="line-numbers"
-                  className="w-12 bg-bg1/50 border-r border-bd py-4 text-right pr-3 text-[10px] font-mono text-txt3/40 shrink-0 select-none overflow-hidden" 
-                  style={{ lineHeight: editorConfig.lineHeight }}
-                >
-                  {lines.map((_, i) => (
-                    <div key={i} className={i === curLine - 1 ? 'text-primary font-bold' : ''}>{i + 1}</div>
-                  ))}
-                </div>
-                <div className="flex-1 overflow-auto no-scrollbar bg-transparent relative">
-                  <div 
-                    className="absolute inset-0 p-4 font-mono pointer-events-none whitespace-pre overflow-hidden opacity-90"
-                    style={{ 
-                      fontSize: `${editorConfig.fontSize}px`, 
-                      lineHeight: editorConfig.lineHeight,
-                      color: editorConfig.colors.foreground
-                    }}
-                  >
-                    {lines.map((line, i) => (
-                      <div 
-                        key={i} 
-                        className={i === curLine - 1 ? 'border-l-2 border-primary -ml-4 pl-[14px]' : ''}
-                        style={{ backgroundColor: i === curLine - 1 ? editorConfig.colors.lineHighlightBackground : 'transparent' }}
-                      >
-                        {highlightCode(line)}
-                      </div>
-                    ))}
-                  </div>
-                  <textarea
-                    className="w-full h-full p-4 bg-transparent outline-none resize-none font-mono text-transparent selection:bg-primary/20"
-                    style={{ 
-                      fontSize: `${editorConfig.fontSize}px`, 
-                      lineHeight: editorConfig.lineHeight,
-                      caretColor: editorConfig.cursorStyle === 'block' ? 'transparent' : 'var(--color-primary)'
-                    }}
-                    spellCheck={false}
-                    value={file.raw}
-                    onChange={(e) => {
+                {/* Monaco Editor — replaces textarea */}
+                <div className="flex-1 overflow-hidden relative">
+                  <MonacoEditorComponent
+                    file={file}
+                    onChange={(value) => {
                       const newFiles = [...files];
-                      newFiles[curFileIdx].raw = e.target.value;
+                      newFiles[curFileIdx].raw = value;
                       setFiles(newFiles);
                       setIsModified(true);
                     }}
-                    onScroll={(e) => {
-                      const target = e.target as HTMLTextAreaElement;
-                      const overlay = target.previousSibling as HTMLElement;
-                      const lineNumbers = document.getElementById('line-numbers');
-                      if (overlay) {
-                        overlay.scrollTop = target.scrollTop;
-                        overlay.scrollLeft = target.scrollLeft;
-                      }
-                      if (lineNumbers) {
-                        lineNumbers.scrollTop = target.scrollTop;
-                      }
-                    }}
-                    onKeyUp={(e) => {
-                      const target = e.target as HTMLTextAreaElement;
-                      const line = target.value.substring(0, target.selectionStart).split('\n').length;
-                      setCurLine(line);
-                    }}
-                    onClick={(e) => {
-                      const target = e.target as HTMLTextAreaElement;
-                      const line = target.value.substring(0, target.selectionStart).split('\n').length;
-                      setCurLine(line);
-                    }}
+                    theme="vs-dark"
+                    minimap={editorConfig.minimapEnabled}
+                    fontSize={editorConfig.fontSize}
+                    wordWrap="on"
+                    lineNumbers="on"
                   />
-                  
-                  {/* Block Cursor Simulation */}
-                  {editorConfig.cursorStyle === 'block' && (
-                    <div className="absolute pointer-events-none" id="custom-cursor" />
-                  )}
                   
                   {/* AI Working Preview Overlay */}
                   <AnimatePresence>

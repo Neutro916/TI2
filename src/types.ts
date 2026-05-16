@@ -52,3 +52,12 @@ export interface Message {
 export type PageType = 'editor' | 'shell' | 'display' | 'settings' | 'hub';
 export type VimMode = 'NORMAL' | 'INSERT' | 'VISUAL' | 'COMMAND';
 export type ChatMode = 'aider' | 'chat' | 'freq';
+
+// Aliases for components ported from T2I-bot-skill
+export type AiMessage = Message;
+
+export interface Notification {
+  id: string;
+  message: string;
+  action?: () => void;
+}

@@ -2,6 +2,10 @@
 node_modules/
 # Build files
 build/
+dist/
+# Sample/test dirs (local only)
+sample/
+jvdoc/
 # Environment files
 .env
 # Logs
