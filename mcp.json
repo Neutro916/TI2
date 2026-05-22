@@ -1,18 +1,13 @@
 {
   "mcpServers": {
-    "t2i-rig-tools": {
-      "command": "node",
-      "args": [
-        "E:/T2I-bot-skill/sdk/bin/t2i-mcp-bridge.js"
-      ],
-      "env": {
-        "T2I_ROOT": "E:/T2I-bot-skill",
-        "AUTH_TOKEN": "T2I_MASTER_SYNC_916"
-      }
+    "t2i-sovereign": {
+      "url": "http://localhost:3000/mcp/sse",
+      "type": "sse",
+      "description": "T2I Sovereign live MCP server — tools: read_file, write_file, execute_shell, termux_run, list_dir, git, ai_chat, search_files, get_metrics"
     },
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "E:/T2I-bot-skill", "E:/Junk"]
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "E:/T2I", "E:/T2I-bot-skill", "C:/Users/natra"]
     }
   }
 }
