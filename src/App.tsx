@@ -47,6 +47,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import MonacoEditorComponent from './components/MonacoEditor';
+import { TutorialModal } from './components/TutorialModal';
 import { 
   FileData, 
   ShellLine, 
@@ -2000,6 +2001,15 @@ export default function App() {
               </button>
               <button 
                 onClick={() => {
+                  localStorage.removeItem('t2i_tutorial_done');
+                  window.dispatchEvent(new Event('t2i:restart-tutorial'));
+                }}
+                className="h-9 bg-bg border border-bd rounded text-[9px] font-bold tracking-widest hover:bg-bg2 transition-colors uppercase"
+              >
+                ↺ Restart Tutorial
+              </button>
+              <button 
+                onClick={() => {
                   setNotifications(prev => [...prev, { id: Date.now().toString(), message: "Refreshing AI Endpoints..." }]);
                   endpoints.forEach(ep => syncModels(ep));
                 }}
@@ -2666,6 +2676,8 @@ export default function App() {
         '--color-primary': primaryColor 
       } as any}
     >
+      <TutorialModal />
+
       {/* Notifications */}
       <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         {notifications.map(n => (
